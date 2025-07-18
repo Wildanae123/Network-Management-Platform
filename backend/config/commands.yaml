@@ -1,0 +1,176 @@
+# Network Device Commands Configuration
+# This file defines the commands to execute on different network device types
+
+arista_eos:
+  system_info:
+    - show version
+    - show hostname
+    - show inventory
+    - show boot-config
+
+  interfaces:
+    - show interfaces
+    - show interfaces status
+    - show interfaces counters
+    - show interfaces description
+
+  routing:
+    - show ip route summary
+    - show ip route
+    - show ipv6 route summary
+
+  switching:
+    - show mac address-table
+    - show vlan
+    - show spanning-tree
+    - show port-channel summary
+
+  protocols:
+    - show ip ospf neighbor
+    - show ip bgp summary
+    - show lldp neighbors
+    - show cdp neighbors
+
+  monitoring:
+    - show processes top
+    - show processes cpu
+    - show memory
+    - show environment all
+
+  mlag:
+    - show mlag
+    - show mlag config-sanity
+    - show mlag interfaces
+
+  security:
+    - show ip access-lists
+    - show aaa accounting
+    - show users
+
+cisco_ios:
+  system_info:
+    - show version
+    - show running-config | include hostname
+    - show inventory
+    - show boot
+
+  interfaces:
+    - show interfaces
+    - show ip interface brief
+    - show interfaces status
+    - show interfaces description
+
+  routing:
+    - show ip route summary
+    - show ip route
+    - show ipv6 route summary
+
+  switching:
+    - show mac address-table
+    - show vlan brief
+    - show spanning-tree summary
+    - show etherchannel summary
+
+  protocols:
+    - show ip ospf neighbor
+    - show ip bgp summary
+    - show cdp neighbors
+    - show lldp neighbors
+
+  monitoring:
+    - show processes cpu
+    - show memory
+    - show environment
+
+cisco_nxos:
+  system_info:
+    - show version
+    - show hostname
+    - show inventory
+    - show boot
+
+  interfaces:
+    - show interface
+    - show interface brief
+    - show interface status
+    - show interface description
+
+  routing:
+    - show ip route summary
+    - show ip route
+    - show ipv6 route summary
+
+  switching:
+    - show mac address-table
+    - show vlan
+    - show spanning-tree summary
+    - show port-channel summary
+
+  protocols:
+    - show ip ospf neighbors
+    - show ip bgp summary
+    - show cdp neighbors
+    - show lldp neighbors
+
+  monitoring:
+    - show processes cpu
+    - show system resources
+    - show environment
+
+  vpc:
+    - show vpc
+    - show vpc peer-keepalive
+    - show vpc consistency-parameters
+
+juniper_junos:
+  system_info:
+    - show version
+    - show system information
+    - show chassis hardware
+
+  interfaces:
+    - show interfaces terse
+    - show interfaces extensive
+    - show interfaces descriptions
+
+  routing:
+    - show route summary
+    - show route protocol ospf
+    - show route protocol bgp
+
+  protocols:
+    - show ospf neighbor
+    - show bgp summary
+    - show lldp neighbors
+
+  monitoring:
+    - show system processes extensive
+    - show system memory
+    - show chassis environment
+
+# Add more vendors as needed
+hp_procurve:
+  system_info:
+    - show system-information
+    - show version
+
+  interfaces:
+    - show interfaces brief
+    - show interfaces
+
+  switching:
+    - show mac-address
+    - show vlans
+    - show spanning-tree
+
+fortinet:
+  system_info:
+    - get system status
+    - get system performance status
+
+  interfaces:
+    - get system interface
+
+  security:
+    - get firewall policy
+    - get system ha status
