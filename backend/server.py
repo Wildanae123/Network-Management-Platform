@@ -23,6 +23,7 @@ import queue
 import socket
 import subprocess
 import getpass
+import ssl
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, Union
@@ -33,6 +34,7 @@ from werkzeug.utils import secure_filename
 from collections import defaultdict
 from utils.ssl_utils import setup_arista_connection
 from app.core.config_manager import ConfigManager
+from jsonrpclib import ServerProxy
 
 # Setup SSL and jsonrpclib
 Server = setup_arista_connection()
@@ -76,11 +78,6 @@ VENDOR_DETECTION_MAP = {
     'cisco_xe': ['ASR', 'CSR', 'ISR4', 'C8000'],
     'cisco_xr': ['ASR9', 'NCS', 'CRS'],
     'arista_eos': ['DCS', 'CCS', 'Arista'],
-    'juniper_junos': ['EX', 'QFX', 'MX', 'SRX', 'ACX'],
-    'hp_procurve': ['ProCurve', 'Aruba', 'HP'],
-    'dell_force10': ['S4048', 'S5048', 'S6010', 'Z9100'],
-    'huawei': ['S5700', 'S6700', 'S7700', 'S9700', 'CE'],
-    'fortinet': ['FGT', 'FortiGate'],
 }
 
 # Configure logging with real-time streaming
@@ -500,12 +497,38 @@ class NetworkDeviceAPIManager:
             
             # Filter commands if specific commands are selected
             if selected_commands:
+                logger.info(f"Selected commands received: {selected_commands}")
+                logger.debug(f"Available command categories: {list(commands_by_category.keys())}")
+                
                 filtered_commands = {}
-                for category in selected_commands:
-                    if category in commands_by_category:
-                        filtered_commands[category] = commands_by_category[category]
-                commands_by_category = filtered_commands
-                logger.debug(f"Filtered to selected command categories: {list(filtered_commands.keys())}")
+                for category_key in selected_commands:
+                    # Handle both direct category names and prefixed category names
+                    # e.g., "interfaces" or "arista_eos_interfaces"
+                    category_name = category_key
+                    if "_" in category_key:
+                        # Extract category from format like "arista_eos_interfaces"
+                        parts = category_key.split("_")
+                        if len(parts) >= 3:  # device_vendor_category format
+                            category_name = "_".join(parts[2:])  # Get everything after device_vendor
+                        elif len(parts) == 2:  # vendor_category format
+                            category_name = parts[1]
+                    
+                    logger.debug(f"Looking for category: '{category_name}' (from '{category_key}')")
+                    
+                    if category_name in commands_by_category:
+                        filtered_commands[category_name] = commands_by_category[category_name]
+                        logger.debug(f"Added category '{category_name}' with {len(commands_by_category[category_name])} commands")
+                    else:
+                        logger.warning(f"Category '{category_name}' not found in available categories: {list(commands_by_category.keys())}")
+                
+                if filtered_commands:
+                    commands_by_category = filtered_commands
+                    logger.info(f"Filtered to selected command categories: {list(filtered_commands.keys())}")
+                else:
+                    logger.warning(f"No valid categories found from selected commands: {selected_commands}")
+                    logger.info("Using all available categories as fallback")
+            else:
+                logger.info("No command selection specified, using all available categories")
             
             # Execute commands by category
             for category, commands in commands_by_category.items():
@@ -706,9 +729,11 @@ class DataProcessor:
                         command_results = result.command_results or {}
 
                     # Summary row
+                    model_sw = result.get('model_sw', 'N/A') if isinstance(result, dict) else getattr(result, 'model_sw', 'N/A')
                     summary_data.append({
                         "IP Address": ip_mgmt,
                         "Hostname": hostname,
+                        "Model SW": model_sw,
                         "Overall Status": overall_status,
                         "Total Commands": len(command_results),
                         "Changed Commands": len([r for r in command_results.values() if r.get("status") == "changed"]),
@@ -721,6 +746,7 @@ class DataProcessor:
                         detailed_data.append({
                             "IP Address": ip_mgmt,
                             "Hostname": hostname,
+                            "Model SW": model_sw,
                             "Command": command.replace('_', ' ').title(),
                             "Status": cmd_result.get("status", "unknown"),
                             "Summary": cmd_result.get("summary", "No summary available"),
@@ -735,53 +761,470 @@ class DataProcessor:
                     df_summary = pd.DataFrame(summary_data)
                     df_summary.to_excel(writer, sheet_name='Summary', index=False)
 
+                # Create comprehensive detailed analysis sheet combining detailed changes and interface specifics
                 if detailed_data:
-                    df_detailed = pd.DataFrame(detailed_data)
-                    df_detailed.to_excel(writer, sheet_name='Detailed Changes', index=False)
+                    comprehensive_data = self._create_comprehensive_detailed_data(comparison_results, detailed_data)
+                    if comprehensive_data:
+                        df_comprehensive = pd.DataFrame(comprehensive_data)
+                        df_comprehensive.to_excel(writer, sheet_name='Detailed Analysis', index=False)
 
-                # Create individual sheets for each command type
+                # Create individual sheets for non-interface command types
                 command_types = set()
                 for result in comparison_results:
                     command_results = result.get('command_results', {}) if isinstance(result, dict) else result.command_results or {}
                     command_types.update(command_results.keys())
 
                 for command_type in command_types:
-                    command_data = []
-                    for result in comparison_results:
-                        if isinstance(result, dict):
-                            ip_mgmt = result.get('ip_mgmt', 'Unknown')
-                            hostname = result.get('hostname', 'Unknown')
-                            command_results = result.get('command_results', {})
-                        else:
-                            ip_mgmt = result.ip_mgmt
-                            hostname = result.hostname
-                            command_results = result.command_results or {}
-
-                        if command_type in command_results:
-                            cmd_result = command_results[command_type]
-                            
-                            # Add changes details
-                            for change_type in ['added', 'removed', 'modified']:
-                                changes = cmd_result.get(change_type, [])
-                                for change in changes:
-                                    command_data.append({
-                                        "IP Address": ip_mgmt,
-                                        "Hostname": hostname,
-                                        "Change Type": change_type.title(),
-                                        "Description": change.get('description', str(change)),
-                                        "Details": str(change)
-                                    })
-
-                    if command_data:
-                        df_command = pd.DataFrame(command_data)
-                        sheet_name = command_type.replace('_', ' ').title()[:31]
-                        df_command.to_excel(writer, sheet_name=sheet_name, index=False)
+                    if command_type == 'interfaces':
+                        # Create dedicated interfaces sheet
+                        self._create_interfaces_detailed_sheet(writer, comparison_results, command_type)
+                    elif command_type == 'mac_address_table':
+                        # Detailed MAC address table comparison
+                        self._create_mac_table_detailed_sheet(writer, comparison_results, command_type)
+                    elif command_type == 'ip_arp':
+                        # Detailed ARP table comparison
+                        self._create_arp_table_detailed_sheet(writer, comparison_results, command_type)
+                    elif command_type == 'mlag_interfaces':
+                        # Detailed MLAG interfaces comparison
+                        self._create_mlag_interfaces_detailed_sheet(writer, comparison_results, command_type)
+                    elif command_type == 'protocols':
+                        # Detailed OSPF neighbor comparison
+                        self._create_ospf_neighbor_detailed_sheet(writer, comparison_results, command_type)
+                    elif command_type == 'mlag':
+                        # Detailed MLAG config sanity comparison
+                        self._create_mlag_config_detailed_sheet(writer, comparison_results, command_type)
+                    else:
+                        # Generic handling for other command types
+                        self._create_generic_detailed_sheet(writer, comparison_results, command_type)
 
             logger.info(f"Enhanced comparison data exported to Excel: {filepath}")
 
         except Exception as e:
             logger.error(f"Error exporting comparison to Excel: {e}")
             raise
+
+    def _create_interfaces_detailed_sheet(self, writer, comparison_results, command_type):
+        """Create detailed interfaces comparison sheet based on api_output.json structure."""
+        interface_data = []
+        
+        for result in comparison_results:
+            ip_mgmt = result.get('ip_mgmt', 'Unknown') if isinstance(result, dict) else result.ip_mgmt
+            hostname = result.get('hostname', 'Unknown') if isinstance(result, dict) else result.hostname
+            model_sw = result.get('model_sw', 'N/A') if isinstance(result, dict) else getattr(result, 'model_sw', 'N/A')
+            command_results = result.get('command_results', {}) if isinstance(result, dict) else result.command_results or {}
+            
+            if command_type in command_results:
+                cmd_result = command_results[command_type]
+                
+                # Process interface status data based on api_output.json structure
+                for interface_name, interface_info in self._extract_interface_data_enhanced(cmd_result):
+                    interface_data.append({
+                        "IP Address": ip_mgmt,
+                        "Hostname": hostname,
+                        "Model SW": model_sw,
+                        "Interface": interface_name,
+                        "Link Status First": interface_info.get('first', {}).get('linkStatus', 'N/A'),
+                        "Link Status Second": interface_info.get('second', {}).get('linkStatus', 'N/A'),
+                        "Description First": interface_info.get('first', {}).get('description', 'N/A'),
+                        "Description Second": interface_info.get('second', {}).get('description', 'N/A'),
+                        "Bandwidth First": interface_info.get('first', {}).get('bandwidth', 'N/A'),
+                        "Bandwidth Second": interface_info.get('second', {}).get('bandwidth', 'N/A'),
+                        "Duplex First": interface_info.get('first', {}).get('duplex', 'N/A'),
+                        "Duplex Second": interface_info.get('second', {}).get('duplex', 'N/A'),
+                        "Interface Type First": interface_info.get('first', {}).get('interfaceType', 'N/A'),
+                        "Interface Type Second": interface_info.get('second', {}).get('interfaceType', 'N/A'),
+                        "VLAN ID First": interface_info.get('first', {}).get('vlanInformation', {}).get('vlanId', 'N/A'),
+                        "VLAN ID Second": interface_info.get('second', {}).get('vlanInformation', {}).get('vlanId', 'N/A'),
+                        "Auto Negotiate First": interface_info.get('first', {}).get('autoNegotiateActive', 'N/A'),
+                        "Auto Negotiate Second": interface_info.get('second', {}).get('autoNegotiateActive', 'N/A'),
+                        "Line Protocol First": interface_info.get('first', {}).get('lineProtocolStatus', 'N/A'),
+                        "Line Protocol Second": interface_info.get('second', {}).get('lineProtocolStatus', 'N/A'),
+                        "MTU First": interface_info.get('first', {}).get('mtu', 'N/A'),
+                        "MTU Second": interface_info.get('second', {}).get('mtu', 'N/A'),
+                        "MAC Address First": interface_info.get('first', {}).get('physicalAddress', 'N/A'),
+                        "MAC Address Second": interface_info.get('second', {}).get('physicalAddress', 'N/A'),
+                        "In Octets First": interface_info.get('first', {}).get('interfaceCounters', {}).get('inOctets', 'N/A'),
+                        "In Octets Second": interface_info.get('second', {}).get('interfaceCounters', {}).get('inOctets', 'N/A'),
+                        "Out Octets First": interface_info.get('first', {}).get('interfaceCounters', {}).get('outOctets', 'N/A'),
+                        "Out Octets Second": interface_info.get('second', {}).get('interfaceCounters', {}).get('outOctets', 'N/A'),
+                        "In Packets First": interface_info.get('first', {}).get('interfaceCounters', {}).get('inTotalPkts', 'N/A'),
+                        "In Packets Second": interface_info.get('second', {}).get('interfaceCounters', {}).get('inTotalPkts', 'N/A'),
+                        "Out Packets First": interface_info.get('first', {}).get('interfaceCounters', {}).get('outTotalPkts', 'N/A'),
+                        "Out Packets Second": interface_info.get('second', {}).get('interfaceCounters', {}).get('outTotalPkts', 'N/A'),
+                        "In Errors First": interface_info.get('first', {}).get('interfaceCounters', {}).get('totalInErrors', 'N/A'),
+                        "In Errors Second": interface_info.get('second', {}).get('interfaceCounters', {}).get('totalInErrors', 'N/A'),
+                        "Out Errors First": interface_info.get('first', {}).get('interfaceCounters', {}).get('totalOutErrors', 'N/A'),
+                        "Out Errors Second": interface_info.get('second', {}).get('interfaceCounters', {}).get('totalOutErrors', 'N/A'),
+                        "Link Status Changes First": interface_info.get('first', {}).get('interfaceCounters', {}).get('linkStatusChanges', 'N/A'),
+                        "Link Status Changes Second": interface_info.get('second', {}).get('interfaceCounters', {}).get('linkStatusChanges', 'N/A'),
+                        "Change Status": interface_info.get('change_status', 'No Change')
+                    })
+        
+        if interface_data:
+            df_interfaces = pd.DataFrame(interface_data)
+            df_interfaces.to_excel(writer, sheet_name='Interfaces Detail', index=False)
+
+    def _extract_interface_data_enhanced(self, cmd_result):
+        """Extract interface data for comparison with enhanced structure based on api_output.json."""
+        interface_data = []
+        
+        # Get interface data from added, removed, and modified lists
+        for added_intf in cmd_result.get('added', []):
+            interface_data.append((added_intf.get('interface', 'Unknown'), {
+                'first': {},
+                'second': added_intf,
+                'change_status': 'Added'
+            }))
+        
+        for removed_intf in cmd_result.get('removed', []):
+            interface_data.append((removed_intf.get('interface', 'Unknown'), {
+                'first': removed_intf,
+                'second': {},
+                'change_status': 'Removed'
+            }))
+        
+        for modified_intf in cmd_result.get('modified', []):
+            interface_name = modified_intf.get('interface', 'Unknown')
+            interface_data.append((interface_name, {
+                'first': modified_intf.get('old_data', {}),
+                'second': modified_intf.get('new_data', {}),
+                'change_status': 'Modified'
+            }))
+        
+        return interface_data
+
+    def _extract_interface_data(self, cmd_result):
+        """Extract interface data for comparison with proper change detection."""
+        interface_data = []
+        
+        # Get interface data from added, removed, and modified lists
+        for added_intf in cmd_result.get('added', []):
+            interface_data.append((added_intf.get('interface', 'Unknown'), {
+                'first': {},
+                'second': added_intf,
+                'change_status': 'Added'
+            }))
+        
+        for removed_intf in cmd_result.get('removed', []):
+            interface_data.append((removed_intf.get('interface', 'Unknown'), {
+                'first': removed_intf,
+                'second': {},
+                'change_status': 'Removed'
+            }))
+        
+        for modified_intf in cmd_result.get('modified', []):
+            interface_data.append((modified_intf.get('interface', 'Unknown'), {
+                'first': modified_intf.get('before', {}),
+                'second': modified_intf.get('after', {}),
+                'change_status': 'Modified'
+            }))
+        
+        return interface_data
+
+    def _create_mac_table_detailed_sheet(self, writer, comparison_results, command_type):
+        """Create detailed MAC address table comparison sheet."""
+        mac_data = []
+        
+        for result in comparison_results:
+            ip_mgmt = result.get('ip_mgmt', 'Unknown') if isinstance(result, dict) else result.ip_mgmt
+            hostname = result.get('hostname', 'Unknown') if isinstance(result, dict) else result.hostname
+            model_sw = result.get('model_sw', 'N/A') if isinstance(result, dict) else getattr(result, 'model_sw', 'N/A')
+            command_results = result.get('command_results', {}) if isinstance(result, dict) else result.command_results or {}
+            
+            if command_type in command_results:
+                cmd_result = command_results[command_type]
+                
+                # Process added MACs
+                for mac_entry in cmd_result.get('added', []):
+                    mac_data.append({
+                        "IP Address": ip_mgmt,
+                        "Hostname": hostname,
+                        "Model SW": model_sw,
+                        "MAC Address": mac_entry.get('mac', 'N/A'),
+                        "VLAN": mac_entry.get('vlan', 'N/A'),
+                        "Interface": mac_entry.get('interface', 'N/A'),
+                        "Type": mac_entry.get('type', 'N/A'),
+                        "Status First": "Not Present",
+                        "Status Second": "Present",
+                        "Change Type": "Added"
+                    })
+                
+                # Process removed MACs
+                for mac_entry in cmd_result.get('removed', []):
+                    mac_data.append({
+                        "IP Address": ip_mgmt,
+                        "Hostname": hostname,
+                        "Model SW": model_sw,
+                        "MAC Address": mac_entry.get('mac', 'N/A'),
+                        "VLAN": mac_entry.get('vlan', 'N/A'),
+                        "Interface": mac_entry.get('interface', 'N/A'),
+                        "Type": mac_entry.get('type', 'N/A'),
+                        "Status First": "Present",
+                        "Status Second": "Not Present",
+                        "Change Type": "Removed"
+                    })
+                
+                # Process modified MACs
+                for mac_entry in cmd_result.get('modified', []):
+                    changes = mac_entry.get('changes', {})
+                    mac_data.append({
+                        "IP Address": ip_mgmt,
+                        "Hostname": hostname,
+                        "Model SW": model_sw,
+                        "MAC Address": mac_entry.get('mac', 'N/A'),
+                        "VLAN": changes.get('before', {}).get('vlanId', 'N/A'),
+                        "Interface": changes.get('before', {}).get('interface', 'N/A'),
+                        "Type": changes.get('before', {}).get('entryType', 'N/A'),
+                        "Status First": "Present",
+                        "Status Second": "Present (Modified)",
+                        "Change Type": "Modified"
+                    })
+        
+        if mac_data:
+            df_mac = pd.DataFrame(mac_data)
+            df_mac.to_excel(writer, sheet_name='MAC Table Detailed', index=False)
+
+    def _create_arp_table_detailed_sheet(self, writer, comparison_results, command_type):
+        """Create detailed ARP table comparison sheet."""
+        arp_data = []
+        
+        for result in comparison_results:
+            ip_mgmt = result.get('ip_mgmt', 'Unknown') if isinstance(result, dict) else result.ip_mgmt
+            hostname = result.get('hostname', 'Unknown') if isinstance(result, dict) else result.hostname
+            command_results = result.get('command_results', {}) if isinstance(result, dict) else result.command_results or {}
+            
+            if command_type in command_results:
+                cmd_result = command_results[command_type]
+                
+                # Process added ARP entries
+                for arp_entry in cmd_result.get('added', []):
+                    arp_data.append({
+                        "IP Address": ip_mgmt,
+                        "Hostname": hostname,
+                        "ARP IP": arp_entry.get('ip', 'N/A'),
+                        "MAC Address": arp_entry.get('mac', 'N/A'),
+                        "Interface": arp_entry.get('interface', 'N/A'),
+                        "Age": arp_entry.get('age', 'N/A'),
+                        "Status First": "Not Present",
+                        "Status Second": "Present",
+                        "Change Type": "Added"
+                    })
+                
+                # Process removed ARP entries
+                for arp_entry in cmd_result.get('removed', []):
+                    arp_data.append({
+                        "IP Address": ip_mgmt,
+                        "Hostname": hostname,
+                        "ARP IP": arp_entry.get('ip', 'N/A'),
+                        "MAC Address": arp_entry.get('mac', 'N/A'),
+                        "Interface": arp_entry.get('interface', 'N/A'),
+                        "Age": arp_entry.get('age', 'N/A'),
+                        "Status First": "Present",
+                        "Status Second": "Not Present",
+                        "Change Type": "Removed"
+                    })
+                
+                # Process modified ARP entries
+                for arp_entry in cmd_result.get('modified', []):
+                    changes = arp_entry.get('changes', {})
+                    arp_data.append({
+                        "IP Address": ip_mgmt,
+                        "Hostname": hostname,
+                        "ARP IP": arp_entry.get('ip', 'N/A'),
+                        "MAC Address": changes.get('before', {}).get('hwAddress', 'N/A'),
+                        "Interface": changes.get('before', {}).get('interface', 'N/A'),
+                        "Age": changes.get('before', {}).get('age', 'N/A'),
+                        "Status First": "Present",
+                        "Status Second": "Present (Modified)",
+                        "Change Type": "Modified"
+                    })
+        
+        if arp_data:
+            df_arp = pd.DataFrame(arp_data)
+            df_arp.to_excel(writer, sheet_name='ARP Table Detailed', index=False)
+
+    def _create_mlag_interfaces_detailed_sheet(self, writer, comparison_results, command_type):
+        """Create detailed MLAG interfaces comparison sheet."""
+        mlag_data = []
+        
+        for result in comparison_results:
+            ip_mgmt = result.get('ip_mgmt', 'Unknown') if isinstance(result, dict) else result.ip_mgmt
+            hostname = result.get('hostname', 'Unknown') if isinstance(result, dict) else result.hostname
+            command_results = result.get('command_results', {}) if isinstance(result, dict) else result.command_results or {}
+            
+            if command_type in command_results:
+                cmd_result = command_results[command_type]
+                
+                # Process added MLAG interfaces
+                for mlag_entry in cmd_result.get('added', []):
+                    mlag_data.append({
+                        "IP Address": ip_mgmt,
+                        "Hostname": hostname,
+                        "MLAG ID": mlag_entry.get('mlag_id', 'N/A'),
+                        "Status First": "Not Present",
+                        "Status Second": mlag_entry.get('status', 'N/A'),
+                        "Local Interface": mlag_entry.get('local_interface', 'N/A'),
+                        "Peer Interface": mlag_entry.get('peer_interface', 'N/A'),
+                        "State": mlag_entry.get('state', 'N/A'),
+                        "Change Type": "Added"
+                    })
+                
+                # Process removed MLAG interfaces
+                for mlag_entry in cmd_result.get('removed', []):
+                    mlag_data.append({
+                        "IP Address": ip_mgmt,
+                        "Hostname": hostname,
+                        "MLAG ID": mlag_entry.get('mlag_id', 'N/A'),
+                        "Status First": mlag_entry.get('status', 'N/A'),
+                        "Status Second": "Not Present",
+                        "Local Interface": mlag_entry.get('local_interface', 'N/A'),
+                        "Peer Interface": mlag_entry.get('peer_interface', 'N/A'),
+                        "State": mlag_entry.get('state', 'N/A'),
+                        "Change Type": "Removed"
+                    })
+                
+                # Process modified MLAG interfaces
+                for mlag_entry in cmd_result.get('modified', []):
+                    mlag_data.append({
+                        "IP Address": ip_mgmt,
+                        "Hostname": hostname,
+                        "MLAG ID": mlag_entry.get('mlag_id', 'N/A'),
+                        "Status First": mlag_entry.get('before', 'N/A'),
+                        "Status Second": mlag_entry.get('after', 'N/A'),
+                        "Local Interface": mlag_entry.get('local_interface', 'N/A'),
+                        "Peer Interface": mlag_entry.get('peer_interface', 'N/A'),
+                        "State": mlag_entry.get('state', 'N/A'),
+                        "Change Type": "Modified"
+                    })
+        
+        if mlag_data:
+            df_mlag = pd.DataFrame(mlag_data)
+            df_mlag.to_excel(writer, sheet_name='MLAG Interfaces Detailed', index=False)
+
+    def _create_ospf_neighbor_detailed_sheet(self, writer, comparison_results, command_type):
+        """Create detailed OSPF neighbor comparison sheet."""
+        ospf_data = []
+        
+        for result in comparison_results:
+            ip_mgmt = result.get('ip_mgmt', 'Unknown') if isinstance(result, dict) else result.ip_mgmt
+            hostname = result.get('hostname', 'Unknown') if isinstance(result, dict) else result.hostname
+            command_results = result.get('command_results', {}) if isinstance(result, dict) else result.command_results or {}
+            
+            if command_type in command_results:
+                cmd_result = command_results[command_type]
+                
+                # Process added OSPF neighbors
+                for ospf_entry in cmd_result.get('added', []):
+                    ospf_data.append({
+                        "IP Address": ip_mgmt,
+                        "Hostname": hostname,
+                        "Neighbor ID": ospf_entry.get('neighbor_id', 'N/A'),
+                        "Neighbor IP": ospf_entry.get('neighbor_ip', 'N/A'),
+                        "Interface": ospf_entry.get('interface', 'N/A'),
+                        "State First": "Not Present",
+                        "State Second": ospf_entry.get('state', 'N/A'),
+                        "Priority": ospf_entry.get('priority', 'N/A'),
+                        "Dead Time": ospf_entry.get('dead_time', 'N/A'),
+                        "Area": ospf_entry.get('area', 'N/A'),
+                        "Change Type": "Added"
+                    })
+                
+                # Process removed OSPF neighbors
+                for ospf_entry in cmd_result.get('removed', []):
+                    ospf_data.append({
+                        "IP Address": ip_mgmt,
+                        "Hostname": hostname,
+                        "Neighbor ID": ospf_entry.get('neighbor_id', 'N/A'),
+                        "Neighbor IP": ospf_entry.get('neighbor_ip', 'N/A'),
+                        "Interface": ospf_entry.get('interface', 'N/A'),
+                        "State First": ospf_entry.get('state', 'N/A'),
+                        "State Second": "Not Present",
+                        "Priority": ospf_entry.get('priority', 'N/A'),
+                        "Dead Time": ospf_entry.get('dead_time', 'N/A'),
+                        "Area": ospf_entry.get('area', 'N/A'),
+                        "Change Type": "Removed"
+                    })
+                
+                # Process modified OSPF neighbors
+                for ospf_entry in cmd_result.get('modified', []):
+                    ospf_data.append({
+                        "IP Address": ip_mgmt,
+                        "Hostname": hostname,
+                        "Neighbor ID": ospf_entry.get('neighbor_id', 'N/A'),
+                        "Neighbor IP": ospf_entry.get('neighbor_ip', 'N/A'),
+                        "Interface": ospf_entry.get('interface', 'N/A'),
+                        "State First": ospf_entry.get('before', 'N/A'),
+                        "State Second": ospf_entry.get('after', 'N/A'),
+                        "Priority": ospf_entry.get('priority', 'N/A'),
+                        "Dead Time": ospf_entry.get('dead_time', 'N/A'),
+                        "Area": ospf_entry.get('area', 'N/A'),
+                        "Change Type": "Modified"
+                    })
+        
+        if ospf_data:
+            df_ospf = pd.DataFrame(ospf_data)
+            df_ospf.to_excel(writer, sheet_name='OSPF Neighbors Detailed', index=False)
+
+    def _create_mlag_config_detailed_sheet(self, writer, comparison_results, command_type):
+        """Create detailed MLAG config sanity comparison sheet."""
+        mlag_config_data = []
+        
+        for result in comparison_results:
+            ip_mgmt = result.get('ip_mgmt', 'Unknown') if isinstance(result, dict) else result.ip_mgmt
+            hostname = result.get('hostname', 'Unknown') if isinstance(result, dict) else result.hostname
+            command_results = result.get('command_results', {}) if isinstance(result, dict) else result.command_results or {}
+            
+            if command_type in command_results:
+                cmd_result = command_results[command_type]
+                
+                # Process configuration changes
+                for config_entry in cmd_result.get('added', []) + cmd_result.get('removed', []) + cmd_result.get('modified', []):
+                    change_type = "Added" if config_entry in cmd_result.get('added', []) else "Removed" if config_entry in cmd_result.get('removed', []) else "Modified"
+                    
+                    mlag_config_data.append({
+                        "IP Address": ip_mgmt,
+                        "Hostname": hostname,
+                        "Configuration Item": config_entry.get('config_item', 'N/A'),
+                        "Category": config_entry.get('category', 'N/A'),
+                        "Value First": config_entry.get('before', 'N/A'),
+                        "Value Second": config_entry.get('after', 'N/A'),
+                        "Severity": config_entry.get('severity', 'N/A'),
+                        "Recommendation": config_entry.get('recommendation', 'N/A'),
+                        "Change Type": change_type
+                    })
+        
+        if mlag_config_data:
+            df_mlag_config = pd.DataFrame(mlag_config_data)
+            df_mlag_config.to_excel(writer, sheet_name='MLAG Config Detailed', index=False)
+
+    def _create_generic_detailed_sheet(self, writer, comparison_results, command_type):
+        """Create generic detailed comparison sheet for other command types."""
+        generic_data = []
+        
+        for result in comparison_results:
+            ip_mgmt = result.get('ip_mgmt', 'Unknown') if isinstance(result, dict) else result.ip_mgmt
+            hostname = result.get('hostname', 'Unknown') if isinstance(result, dict) else result.hostname
+            command_results = result.get('command_results', {}) if isinstance(result, dict) else result.command_results or {}
+            
+            if command_type in command_results:
+                cmd_result = command_results[command_type]
+                
+                # Process all changes generically
+                for change_type in ['added', 'removed', 'modified']:
+                    changes = cmd_result.get(change_type, [])
+                    for change in changes:
+                        generic_data.append({
+                            "IP Address": ip_mgmt,
+                            "Hostname": hostname,
+                            "Change Type": change_type.title(),
+                            "Description": change.get('description', str(change)),
+                            "Details": str(change)
+                        })
+        
+        if generic_data:
+            df_generic = pd.DataFrame(generic_data)
+            sheet_name = command_type.replace('_', ' ').title()[:31]
+            df_generic.to_excel(writer, sheet_name=sheet_name, index=False)
 
     def _compare_command_data(self, first_data: Dict, second_data: Dict, command_category: str) -> Dict:
         """Enhanced comparison with detailed changes."""
@@ -798,11 +1241,11 @@ class DataProcessor:
             
             if command_category == "mac_address_table":
                 differences = self._compare_mac_table_enhanced(first_data, second_data)
-            elif command_category == "ip_arp":
+            elif command_category == "protocols":
                 differences = self._compare_arp_table_enhanced(first_data, second_data)
-            elif command_category == "interfaces_status":
+            elif command_category == "interfaces_status" or command_category == "interfaces":
                 differences = self._compare_interfaces_enhanced(first_data, second_data)
-            elif command_category == "mlag_interfaces":
+            elif command_category == "mlag":
                 differences = self._compare_mlag_enhanced(first_data, second_data)
             else:
                 # Generic comparison with detailed diff
@@ -921,6 +1364,214 @@ class DataProcessor:
         
         return differences
 
+    def _compare_mlag_enhanced(self, first_data: Dict, second_data: Dict) -> Dict:
+        """Enhanced MLAG comparison covering all MLAG commands."""
+        differences = {
+            "status": "no_changes",
+            "summary": "",
+            "details": [],
+            "added": [],
+            "removed": [],
+            "modified": [],
+            "statistics": {}
+        }
+        
+        try:
+            # Check all MLAG-related commands
+            mlag_commands = [
+                'show mlag',
+                'show mlag config-sanity',
+                'show mlag interfaces detail',
+                'show mlag detail'
+            ]
+            
+            changes_found = False
+            total_changes = 0
+            
+            # Compare each MLAG command
+            for cmd in mlag_commands:
+                first_cmd = first_data.get(cmd, {})
+                second_cmd = second_data.get(cmd, {})
+                
+                if not first_cmd and not second_cmd:
+                    continue  # Skip if both are missing
+                
+                if not first_cmd or not second_cmd:
+                    differences["details"].append(f"Command '{cmd}' missing in one file")
+                    changes_found = True
+                    continue
+                
+                # Compare MLAG command data
+                cmd_result = self._compare_mlag_command(first_cmd, second_cmd, cmd)
+                if cmd_result["changes_count"] > 0:
+                    changes_found = True
+                    total_changes += cmd_result["changes_count"]
+                    
+                    # Merge results
+                    differences["added"].extend(cmd_result["added"])
+                    differences["removed"].extend(cmd_result["removed"])
+                    differences["modified"].extend(cmd_result["modified"])
+                    differences["details"].extend(cmd_result["details"])
+            
+            # Set final status
+            if changes_found:
+                differences["status"] = "changed"
+                differences["summary"] = f"Found {total_changes} MLAG changes across {len([cmd for cmd in mlag_commands if first_data.get(cmd) or second_data.get(cmd)])} commands"
+            else:
+                differences["status"] = "no_changes"
+                differences["summary"] = "No MLAG changes detected"
+            
+            differences["statistics"] = {
+                "total_changes": total_changes,
+                "added_count": len(differences["added"]),
+                "removed_count": len(differences["removed"]),
+                "modified_count": len(differences["modified"])
+            }
+            
+            return differences
+            
+        except Exception as e:
+            logger.error(f"Error in MLAG comparison: {e}")
+            differences["status"] = "error"
+            differences["summary"] = f"Error during MLAG comparison: {str(e)}"
+            return differences
+
+    def _compare_mlag_command(self, first_cmd: Dict, second_cmd: Dict, command_name: str) -> Dict:
+        """Compare MLAG data for a specific command and return detailed change information."""
+        result = {
+            "changes_count": 0,
+            "added": [],
+            "removed": [],
+            "modified": [],
+            "details": []
+        }
+        
+        try:
+            if command_name == 'show mlag interfaces detail':
+                # Compare MLAG interfaces
+                first_intfs = first_cmd.get('interfaces', {})
+                second_intfs = second_cmd.get('interfaces', {})
+                
+                # Added interfaces
+                for intf_id in set(second_intfs.keys()) - set(first_intfs.keys()):
+                    intf_data = second_intfs[intf_id]
+                    result["added"].append({
+                        'type': 'mlag_interface',
+                        'interface_id': intf_id,
+                        'local_interface': intf_data.get('localInterface'),
+                        'status': intf_data.get('status'),
+                        'description': f"MLAG interface {intf_id} ({intf_data.get('localInterface')}) added"
+                    })
+                    result["changes_count"] += 1
+                
+                # Removed interfaces
+                for intf_id in set(first_intfs.keys()) - set(second_intfs.keys()):
+                    intf_data = first_intfs[intf_id]
+                    result["removed"].append({
+                        'type': 'mlag_interface',
+                        'interface_id': intf_id,
+                        'local_interface': intf_data.get('localInterface'),
+                        'status': intf_data.get('status'),
+                        'description': f"MLAG interface {intf_id} ({intf_data.get('localInterface')}) removed"
+                    })
+                    result["changes_count"] += 1
+                
+                # Modified interfaces
+                for intf_id in set(first_intfs.keys()) & set(second_intfs.keys()):
+                    first_intf = first_intfs[intf_id]
+                    second_intf = second_intfs[intf_id]
+                    
+                    changes = []
+                    # Check key attributes
+                    for attr in ['localInterfaceStatus', 'peerInterfaceStatus', 'status', 'localInterfaceDescription']:
+                        if first_intf.get(attr) != second_intf.get(attr):
+                            changes.append(f"{attr}: {first_intf.get(attr)} → {second_intf.get(attr)}")
+                    
+                    # Check detail attributes
+                    first_detail = first_intf.get('detail', {})
+                    second_detail = second_intf.get('detail', {})
+                    for attr in ['changeCount', 'lastChangeTime']:
+                        if first_detail.get(attr) != second_detail.get(attr):
+                            changes.append(f"detail.{attr}: {first_detail.get(attr)} → {second_detail.get(attr)}")
+                    
+                    if changes:
+                        result["modified"].append({
+                            'type': 'mlag_interface',
+                            'interface_id': intf_id,
+                            'local_interface': first_intf.get('localInterface'),
+                            'changes': changes,
+                            'before': first_intf,
+                            'after': second_intf,
+                            'description': f"MLAG interface {intf_id} modified: {', '.join(changes)}"
+                        })
+                        result["changes_count"] += 1
+            
+            elif command_name in ['show mlag', 'show mlag detail']:
+                # Compare top-level MLAG state
+                state_attrs = ['state', 'negStatus', 'peerLinkStatus', 'localIntfStatus', 'configSanity']
+                port_attrs = ['mlagPorts']
+                detail_attrs = ['mlagState', 'peerMlagState', 'stateChanges', 'failover', 'enabled'] if command_name == 'show mlag detail' else []
+                
+                changes = []
+                
+                # Check state attributes
+                for attr in state_attrs:
+                    if first_cmd.get(attr) != second_cmd.get(attr):
+                        changes.append(f"{attr}: {first_cmd.get(attr)} → {second_cmd.get(attr)}")
+                
+                # Check port counts
+                for attr in port_attrs:
+                    first_ports = first_cmd.get(attr, {})
+                    second_ports = second_cmd.get(attr, {})
+                    for port_type in ['Disabled', 'Configured', 'Inactive', 'Active-partial', 'Active-full']:
+                        if first_ports.get(port_type) != second_ports.get(port_type):
+                            changes.append(f"ports.{port_type}: {first_ports.get(port_type)} → {second_ports.get(port_type)}")
+                
+                # Check detail attributes for show mlag detail
+                if command_name == 'show mlag detail':
+                    first_detail = first_cmd.get('detail', {})
+                    second_detail = second_cmd.get('detail', {})
+                    for attr in detail_attrs:
+                        if first_detail.get(attr) != second_detail.get(attr):
+                            changes.append(f"detail.{attr}: {first_detail.get(attr)} → {second_detail.get(attr)}")
+                
+                if changes:
+                    result["modified"].append({
+                        'type': 'mlag_state',
+                        'command': command_name,
+                        'changes': changes,
+                        'before': first_cmd,
+                        'after': second_cmd,
+                        'description': f"MLAG state modified: {', '.join(changes)}"
+                    })
+                    result["changes_count"] += 1
+            
+            elif command_name == 'show mlag config-sanity':
+                # Compare MLAG config sanity
+                attrs = ['mlagActive', 'mlagConnected']
+                changes = []
+                
+                for attr in attrs:
+                    if first_cmd.get(attr) != second_cmd.get(attr):
+                        changes.append(f"{attr}: {first_cmd.get(attr)} → {second_cmd.get(attr)}")
+                
+                if changes:
+                    result["modified"].append({
+                        'type': 'mlag_config_sanity',
+                        'changes': changes,
+                        'before': first_cmd,
+                        'after': second_cmd,
+                        'description': f"MLAG config sanity modified: {', '.join(changes)}"
+                    })
+                    result["changes_count"] += 1
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error comparing MLAG command {command_name}: {e}")
+            result["details"].append(f"Error comparing {command_name}: {str(e)}")
+            return result
+
     def _compare_arp_table_enhanced(self, first_data: Dict, second_data: Dict) -> Dict:
         """Enhanced ARP table comparison."""
         differences = {
@@ -945,82 +1596,126 @@ class DataProcessor:
             first_entries = first_cmd.get('ipV4Neighbors', [])
             second_entries = second_cmd.get('ipV4Neighbors', [])
             
-            first_ips = {entry['address']: entry for entry in first_entries}
-            second_ips = {entry['address']: entry for entry in second_entries}
+            # Create detailed mappings based on IP address
+            first_arps = {entry['address']: entry for entry in first_entries}
+            second_arps = {entry['address']: entry for entry in second_entries}
             
-            added_ips = set(second_ips.keys()) - set(first_ips.keys())
-            removed_ips = set(first_ips.keys()) - set(second_ips.keys())
+            added_ips = set(second_arps.keys()) - set(first_arps.keys())
+            removed_ips = set(first_arps.keys()) - set(second_arps.keys())
             
-            # Check for modifications
-            modified_ips = []
-            for ip in set(first_ips.keys()) & set(second_ips.keys()):
-                if first_ips[ip] != second_ips[ip]:
-                    modified_ips.append({
-                        'ip': ip,
-                        'before': first_ips[ip],
-                        'after': second_ips[ip]
-                    })
+            changes_found = False
+            total_changes = 0
             
-            # Compile results
+            # Added ARP entries
             if added_ips:
                 for ip in added_ips:
-                    entry = second_ips[ip]
+                    entry = second_arps[ip]
                     differences["added"].append({
                         'type': 'arp_entry',
-                        'ip': ip,
-                        'mac': entry.get('hwAddress'),
+                        'address': ip,
+                        'hwAddress': entry.get('hwAddress'),
                         'interface': entry.get('interface'),
-                        'description': f"ARP {ip} added with MAC {entry.get('hwAddress')} on {entry.get('interface')}"
+                        'age': entry.get('age'),
+                        'description': f"ARP entry {ip} ({entry.get('hwAddress')}) added on {entry.get('interface')}"
                     })
+                    total_changes += 1
+                    changes_found = True
             
+            # Removed ARP entries
             if removed_ips:
                 for ip in removed_ips:
-                    entry = first_ips[ip]
+                    entry = first_arps[ip]
                     differences["removed"].append({
                         'type': 'arp_entry',
-                        'ip': ip,
-                        'mac': entry.get('hwAddress'),
+                        'address': ip,
+                        'hwAddress': entry.get('hwAddress'),
                         'interface': entry.get('interface'),
-                        'description': f"ARP {ip} removed with MAC {entry.get('hwAddress')} from {entry.get('interface')}"
+                        'age': entry.get('age'),
+                        'description': f"ARP entry {ip} ({entry.get('hwAddress')}) removed from {entry.get('interface')}"
                     })
+                    total_changes += 1
+                    changes_found = True
             
-            if modified_ips:
-                for mod in modified_ips:
+            # Modified ARP entries
+            for ip in set(first_arps.keys()) & set(second_arps.keys()):
+                first_entry = first_arps[ip]
+                second_entry = second_arps[ip]
+                
+                changes = []
+                # Check key attributes
+                for attr in ['hwAddress', 'interface', 'age']:
+                    if first_entry.get(attr) != second_entry.get(attr):
+                        changes.append(f"{attr}: {first_entry.get(attr)} → {second_entry.get(attr)}")
+                
+                if changes:
                     differences["modified"].append({
                         'type': 'arp_entry',
-                        'ip': mod['ip'],
-                        'changes': mod,
-                        'description': f"ARP {mod['ip']} modified"
+                        'address': ip,
+                        'changes': changes,
+                        'before': first_entry,
+                        'after': second_entry,
+                        'description': f"ARP entry {ip} modified: {', '.join(changes)}"
                     })
+                    total_changes += 1
+                    changes_found = True
             
-            # Statistics
-            differences["statistics"] = {
-                'total_before': len(first_entries),
-                'total_after': len(second_entries),
-                'added_count': len(added_ips),
-                'removed_count': len(removed_ips),
-                'modified_count': len(modified_ips)
+            # Compare summary statistics
+            first_stats = {
+                'totalEntries': first_cmd.get('totalEntries', 0),
+                'staticEntries': first_cmd.get('staticEntries', 0),
+                'dynamicEntries': first_cmd.get('dynamicEntries', 0),
+                'notLearnedEntries': first_cmd.get('notLearnedEntries', 0)
+            }
+            second_stats = {
+                'totalEntries': second_cmd.get('totalEntries', 0),
+                'staticEntries': second_cmd.get('staticEntries', 0),
+                'dynamicEntries': second_cmd.get('dynamicEntries', 0),
+                'notLearnedEntries': second_cmd.get('notLearnedEntries', 0)
             }
             
-            if added_ips or removed_ips or modified_ips:
+            stats_changes = []
+            for stat in first_stats:
+                if first_stats[stat] != second_stats[stat]:
+                    stats_changes.append(f"{stat}: {first_stats[stat]} → {second_stats[stat]}")
+            
+            if stats_changes:
+                differences["modified"].append({
+                    'type': 'arp_statistics',
+                    'changes': stats_changes,
+                    'before': first_stats,
+                    'after': second_stats,
+                    'description': f"ARP table statistics changed: {', '.join(stats_changes)}"
+                })
+                total_changes += 1
+                changes_found = True
+            
+            # Set final status
+            if changes_found:
                 differences["status"] = "changed"
-                differences["summary"] = f"ARP table changes: {len(added_ips)} added, {len(removed_ips)} removed, {len(modified_ips)} modified"
-                
-                # Compile details
-                differences["details"] = []
-                differences["details"].extend([item['description'] for item in differences["added"]])
-                differences["details"].extend([item['description'] for item in differences["removed"]])
-                differences["details"].extend([item['description'] for item in differences["modified"]])
+                differences["summary"] = f"Found {total_changes} ARP changes - {len(added_ips)} added, {len(removed_ips)} removed, {len([m for m in differences['modified'] if m['type'] == 'arp_entry'])} modified entries"
+            else:
+                differences["status"] = "no_changes"
+                differences["summary"] = "No ARP table changes detected"
+            
+            differences["statistics"] = {
+                "total_changes": total_changes,
+                "added_count": len(differences["added"]),
+                "removed_count": len(differences["removed"]),
+                "modified_count": len(differences["modified"]),
+                "first_total_entries": first_stats['totalEntries'],
+                "second_total_entries": second_stats['totalEntries']
+            }
+            
+            return differences
             
         except Exception as e:
+            logger.error(f"Error in ARP comparison: {e}")
             differences["status"] = "error"
-            differences["summary"] = f"Error comparing ARP tables: {str(e)}"
-            differences["statistics"] = {"error": str(e)}
-        
-        return differences
+            differences["summary"] = f"Error during ARP comparison: {str(e)}"
+            return differences
 
     def _compare_interfaces_enhanced(self, first_data: Dict, second_data: Dict) -> Dict:
-        """Enhanced interface status comparison."""
+        """Enhanced interface comparison covering all interface commands."""
         differences = {
             "status": "no_changes",
             "summary": "",
@@ -1032,12 +1727,85 @@ class DataProcessor:
         }
         
         try:
+            # Check all interface-related commands
+            interface_commands = [
+                'show interfaces',
+                'show interfaces status', 
+                'show interfaces counters',
+                'show interfaces description'
+            ]
+            
+            changes_found = False
+            total_changes = 0
+            
+            # Compare each interface command
+            for cmd in interface_commands:
+                first_cmd = first_data.get(cmd, {})
+                second_cmd = second_data.get(cmd, {})
+                
+                if not first_cmd and not second_cmd:
+                    continue  # Skip if both are missing
+                
+                if not first_cmd or not second_cmd:
+                    differences["details"].append(f"Command '{cmd}' missing in one file")
+                    changes_found = True
+                    continue
+                
+                # Handle different data structures for each command
+                if cmd == 'show interfaces status':
+                    first_intfs = first_cmd.get('interfaceStatuses', {})
+                    second_intfs = second_cmd.get('interfaceStatuses', {})
+                elif cmd == 'show interfaces':
+                    first_intfs = first_cmd.get('interfaces', {})
+                    second_intfs = second_cmd.get('interfaces', {})
+                elif cmd == 'show interfaces counters':
+                    first_intfs = first_cmd.get('interfaces', {})
+                    second_intfs = second_cmd.get('interfaces', {})
+                elif cmd == 'show interfaces description':
+                    first_intfs = first_cmd.get('interfaceDescriptions', {})
+                    second_intfs = second_cmd.get('interfaceDescriptions', {})
+                else:
+                    continue
+                
+                # Compare interfaces for this command
+                cmd_result = self._compare_interface_command(first_intfs, second_intfs, cmd)
+                if cmd_result["changes_count"] > 0:
+                    changes_found = True
+                    total_changes += cmd_result["changes_count"]
+                    
+                    # Add command-specific details
+                    differences["details"].append(f"Changes in '{cmd}': {cmd_result['changes_count']} interfaces affected")
+                    differences["details"].extend(cmd_result["details"])
+                    
+                    # Aggregate changes from this command
+                    differences["added"].extend(cmd_result["added"])
+                    differences["removed"].extend(cmd_result["removed"])
+                    differences["modified"].extend(cmd_result["modified"])
+            
+            if changes_found:
+                differences["status"] = "changed"
+                differences["summary"] = f"Interface changes detected across {total_changes} interfaces in multiple commands"
+                
+                # Add detailed statistics
+                differences["statistics"] = {
+                    "total_changes": total_changes,
+                    "added_interfaces": len(differences["added"]),
+                    "removed_interfaces": len(differences["removed"]),
+                    "modified_interfaces": len(differences["modified"]),
+                    "commands_with_changes": len([cmd for cmd in interface_commands 
+                                                if self._command_has_changes(first_data.get(cmd, {}), second_data.get(cmd, {}))]),
+                    "breakdown_by_command": self._get_command_breakdown(differences)
+                }
+                
+                return differences
+            
+            # If no changes found in any command, fall back to original logic for compatibility
             first_cmd = first_data.get('show interfaces status', {})
             second_cmd = second_data.get('show interfaces status', {})
             
             if not first_cmd or not second_cmd:
-                differences["status"] = "error"
-                differences["summary"] = "Interface status data missing"
+                differences["status"] = "no_changes"
+                differences["summary"] = "No interface data to compare"
                 return differences
             
             first_intfs = first_cmd.get('interfaceStatuses', {})
@@ -1050,32 +1818,76 @@ class DataProcessor:
             status_changes = []
             
             for intf_name in all_interfaces:
-                first_status = first_intfs.get(intf_name, {}).get('linkStatus')
-                second_status = second_intfs.get(intf_name, {}).get('linkStatus')
+                first_intf = first_intfs.get(intf_name, {})
+                second_intf = second_intfs.get(intf_name, {})
                 
                 if intf_name in added_interfaces:
                     differences["added"].append({
                         'type': 'interface',
                         'interface': intf_name,
-                        'status': second_status,
-                        'description': f"Interface {intf_name} added with status {second_status}"
+                        'linkStatus': second_intf.get('linkStatus'),
+                        'description': second_intf.get('description'),
+                        'bandwidth': second_intf.get('bandwidth'),
+                        'duplex': second_intf.get('duplex'),
+                        'interfaceType': second_intf.get('interfaceType'),
+                        'vlanInformation': second_intf.get('vlanInformation'),
+                        'autoNegotiateActive': second_intf.get('autoNegotiateActive'),
+                        'lineProtocolStatus': second_intf.get('lineProtocolStatus'),
+                        'description_text': f"Interface {intf_name} added with status {second_intf.get('linkStatus')}"
                     })
                 elif intf_name in removed_interfaces:
                     differences["removed"].append({
                         'type': 'interface',
                         'interface': intf_name,
-                        'status': first_status,
-                        'description': f"Interface {intf_name} removed (was {first_status})"
+                        'linkStatus': first_intf.get('linkStatus'),
+                        'description': first_intf.get('description'),
+                        'bandwidth': first_intf.get('bandwidth'),
+                        'duplex': first_intf.get('duplex'),
+                        'interfaceType': first_intf.get('interfaceType'),
+                        'vlanInformation': first_intf.get('vlanInformation'),
+                        'autoNegotiateActive': first_intf.get('autoNegotiateActive'),
+                        'lineProtocolStatus': first_intf.get('lineProtocolStatus'),
+                        'description_text': f"Interface {intf_name} removed (was {first_intf.get('linkStatus')})"
                     })
-                elif first_status != second_status:
-                    differences["modified"].append({
-                        'type': 'interface',
-                        'interface': intf_name,
-                        'before': first_status,
-                        'after': second_status,
-                        'description': f"Interface {intf_name}: {first_status} -> {second_status}"
-                    })
-                    status_changes.append(f"Interface {intf_name}: {first_status} -> {second_status}")
+                else:
+                    # Check for detailed changes in interface attributes
+                    changes_detected = []
+                    
+                    # Compare key interface attributes
+                    attributes_to_compare = [
+                        'linkStatus', 'description', 'bandwidth', 'duplex', 
+                        'interfaceType', 'autoNegotiateActive', 'lineProtocolStatus'
+                    ]
+                    
+                    interface_changed = False
+                    change_details = {}
+                    
+                    for attr in attributes_to_compare:
+                        first_val = first_intf.get(attr)
+                        second_val = second_intf.get(attr)
+                        if first_val != second_val:
+                            interface_changed = True
+                            change_details[attr] = {'before': first_val, 'after': second_val}
+                            changes_detected.append(f"{attr}: {first_val} -> {second_val}")
+                    
+                    # Compare VLAN information if present
+                    first_vlan = first_intf.get('vlanInformation', {})
+                    second_vlan = second_intf.get('vlanInformation', {})
+                    if first_vlan != second_vlan:
+                        interface_changed = True
+                        change_details['vlanInformation'] = {'before': first_vlan, 'after': second_vlan}
+                        changes_detected.append(f"VLAN info changed")
+                    
+                    if interface_changed:
+                        differences["modified"].append({
+                            'type': 'interface',
+                            'interface': intf_name,
+                            'old_data': first_intf,
+                            'new_data': second_intf,
+                            'changes': change_details,
+                            'description_text': f"Interface {intf_name}: {', '.join(changes_detected)}"
+                        })
+                        status_changes.append(f"Interface {intf_name}: {', '.join(changes_detected)}")
             
             # Statistics
             differences["statistics"] = {
@@ -1092,9 +1904,9 @@ class DataProcessor:
                 
                 # Compile details
                 differences["details"] = []
-                differences["details"].extend([item['description'] for item in differences["added"]])
-                differences["details"].extend([item['description'] for item in differences["removed"]])
-                differences["details"].extend([item['description'] for item in differences["modified"]])
+                differences["details"].extend([item['description_text'] for item in differences["added"]])
+                differences["details"].extend([item['description_text'] for item in differences["removed"]])
+                differences["details"].extend([item['description_text'] for item in differences["modified"]])
             
         except Exception as e:
             differences["status"] = "error"
@@ -1102,6 +1914,465 @@ class DataProcessor:
             differences["statistics"] = {"error": str(e)}
         
         return differences
+
+    def _compare_interface_command(self, first_intfs: Dict, second_intfs: Dict, command_name: str) -> Dict:
+        """Compare interfaces for a specific command and return detailed change information."""
+        result = {
+            "changes_count": 0,
+            "added": [],
+            "removed": [],
+            "modified": [],
+            "details": []
+        }
+        
+        all_interfaces = set(first_intfs.keys()) | set(second_intfs.keys())
+        added_interfaces = set(second_intfs.keys()) - set(first_intfs.keys())
+        removed_interfaces = set(first_intfs.keys()) - set(second_intfs.keys())
+        
+        # Track added interfaces
+        for intf_name in added_interfaces:
+            intf_data = second_intfs.get(intf_name, {})
+            result["added"].append({
+                "interface": intf_name,
+                "data": intf_data,
+                "command": command_name
+            })
+            result["details"].append(f"Added interface {intf_name} in '{command_name}'")
+        
+        # Track removed interfaces  
+        for intf_name in removed_interfaces:
+            intf_data = first_intfs.get(intf_name, {})
+            result["removed"].append({
+                "interface": intf_name,
+                "data": intf_data,
+                "command": command_name
+            })
+            result["details"].append(f"Removed interface {intf_name} in '{command_name}'")
+        
+        # Check for modifications in existing interfaces
+        for intf_name in all_interfaces:
+            if intf_name in added_interfaces or intf_name in removed_interfaces:
+                continue
+                
+            first_intf = first_intfs.get(intf_name, {})
+            second_intf = second_intfs.get(intf_name, {})
+            
+            # Compare interface data - if they're different, track the change
+            if first_intf != second_intf:
+                # Identify specific attribute changes
+                changed_attributes = []
+                for key in set(first_intf.keys()) | set(second_intf.keys()):
+                    first_val = first_intf.get(key)
+                    second_val = second_intf.get(key)
+                    if first_val != second_val:
+                        changed_attributes.append({
+                            "attribute": key,
+                            "before": first_val,
+                            "after": second_val
+                        })
+                
+                result["modified"].append({
+                    "interface": intf_name,
+                    "command": command_name,
+                    "old_data": first_intf,
+                    "new_data": second_intf,
+                    "changed_attributes": changed_attributes
+                })
+                
+                # Create detailed description of changes
+                attr_changes = ", ".join([f"{attr['attribute']}: {attr['before']} → {attr['after']}" 
+                                        for attr in changed_attributes[:3]])  # Limit to first 3 for readability
+                if len(changed_attributes) > 3:
+                    attr_changes += f" (+{len(changed_attributes)-3} more)"
+                
+                result["details"].append(f"Modified interface {intf_name} in '{command_name}': {attr_changes}")
+                logger.debug(f"Interface {intf_name} changed in {command_name}: {len(changed_attributes)} attributes")
+        
+        result["changes_count"] = len(result["added"]) + len(result["removed"]) + len(result["modified"])
+        return result
+
+    def _command_has_changes(self, first_cmd: Dict, second_cmd: Dict) -> bool:
+        """Check if a command has any changes."""
+        return first_cmd != second_cmd and (first_cmd or second_cmd)
+
+    def _get_command_breakdown(self, differences: Dict) -> Dict:
+        """Get breakdown of changes by command."""
+        breakdown = {}
+        
+        # Group changes by command
+        for item in differences["added"] + differences["removed"] + differences["modified"]:
+            cmd = item.get("command", "unknown")
+            if cmd not in breakdown:
+                breakdown[cmd] = {"added": 0, "removed": 0, "modified": 0, "interfaces": []}
+            
+            if item in differences["added"]:
+                breakdown[cmd]["added"] += 1
+                breakdown[cmd]["interfaces"].append(f"{item['interface']} (added)")
+            elif item in differences["removed"]:
+                breakdown[cmd]["removed"] += 1
+                breakdown[cmd]["interfaces"].append(f"{item['interface']} (removed)")
+            elif item in differences["modified"]:
+                breakdown[cmd]["modified"] += 1
+                # Add specific attribute changes for modified interfaces
+                if "changed_attributes" in item:
+                    attr_list = [attr["attribute"] for attr in item["changed_attributes"][:3]]
+                    attr_summary = ", ".join(attr_list)
+                    if len(item["changed_attributes"]) > 3:
+                        attr_summary += f" (+{len(item['changed_attributes'])-3} more)"
+                    breakdown[cmd]["interfaces"].append(f"{item['interface']} (modified: {attr_summary})")
+                else:
+                    breakdown[cmd]["interfaces"].append(f"{item['interface']} (modified)")
+        
+        return breakdown
+
+    def _create_comprehensive_detailed_data(self, comparison_results: List[Dict], detailed_data: List[Dict]) -> List[Dict]:
+        """Create comprehensive detailed data combining general changes and interface specifics."""
+        comprehensive_data = []
+        
+        # Start with the general detailed changes
+        for item in detailed_data:
+            comprehensive_data.append({
+                "Type": "General",
+                "IP Address": item.get("IP Address", ""),
+                "Hostname": item.get("Hostname", ""),
+                "Model SW": item.get("Model SW", ""),
+                "Command": item.get("Command", ""),
+                "Status": item.get("Status", ""),
+                "Summary": item.get("Summary", ""),
+                "Added Items": item.get("Added Items", ""),
+                "Removed Items": item.get("Removed Items", ""),
+                "Modified Items": item.get("Modified Items", ""),
+                "Details": item.get("Details", ""),
+                "Interface": "",
+                "Change Type": "",
+                "Attribute Changed": "",
+                "Before Value": "",
+                "After Value": "",
+                "MAC Address": "",
+                "VLAN": "",
+                "Bandwidth": "",
+                "Duplex": "",
+                "Line Protocol": ""
+            })
+        
+        # Add detailed interface information
+        for result in comparison_results:
+            ip_mgmt = result.get('ip_mgmt', 'Unknown') if isinstance(result, dict) else result.ip_mgmt
+            hostname = result.get('hostname', 'Unknown') if isinstance(result, dict) else result.hostname
+            model_sw = result.get('model_sw', 'N/A') if isinstance(result, dict) else getattr(result, 'model_sw', 'N/A')
+            command_results = result.get('command_results', {}) if isinstance(result, dict) else result.command_results or {}
+            
+            # Process interface commands
+            for command_type in ['interfaces', 'interfaces_status']:
+                if command_type in command_results:
+                    cmd_result = command_results[command_type]
+                    
+                    # Process added interfaces
+                    for item in cmd_result.get('added', []):
+                        comprehensive_data.append(self._create_interface_row(
+                            ip_mgmt, hostname, model_sw, item, "Added", command_type
+                        ))
+                    
+                    # Process removed interfaces
+                    for item in cmd_result.get('removed', []):
+                        comprehensive_data.append(self._create_interface_row(
+                            ip_mgmt, hostname, model_sw, item, "Removed", command_type
+                        ))
+                    
+                    # Process modified interfaces
+                    for item in cmd_result.get('modified', []):
+                        comprehensive_data.append(self._create_interface_row(
+                            ip_mgmt, hostname, model_sw, item, "Modified", command_type
+                        ))
+            
+            # Process MLAG commands
+            if 'mlag' in command_results:
+                cmd_result = command_results['mlag']
+                
+                # Process added MLAG items
+                for item in cmd_result.get('added', []):
+                    comprehensive_data.append(self._create_mlag_row(
+                        ip_mgmt, hostname, model_sw, item, "Added"
+                    ))
+                
+                # Process removed MLAG items
+                for item in cmd_result.get('removed', []):
+                    comprehensive_data.append(self._create_mlag_row(
+                        ip_mgmt, hostname, model_sw, item, "Removed"
+                    ))
+                
+                # Process modified MLAG items
+                for item in cmd_result.get('modified', []):
+                    comprehensive_data.append(self._create_mlag_row(
+                        ip_mgmt, hostname, model_sw, item, "Modified"
+                    ))
+            
+            # Process ARP/Protocols commands
+            if 'protocols' in command_results:
+                cmd_result = command_results['protocols']
+                
+                # Process added ARP entries
+                for item in cmd_result.get('added', []):
+                    comprehensive_data.append(self._create_arp_row(
+                        ip_mgmt, hostname, model_sw, item, "Added"
+                    ))
+                
+                # Process removed ARP entries
+                for item in cmd_result.get('removed', []):
+                    comprehensive_data.append(self._create_arp_row(
+                        ip_mgmt, hostname, model_sw, item, "Removed"
+                    ))
+                
+                # Process modified ARP entries
+                for item in cmd_result.get('modified', []):
+                    comprehensive_data.append(self._create_arp_row(
+                        ip_mgmt, hostname, model_sw, item, "Modified"
+                    ))
+            
+            # Process Routing commands
+            if 'routing' in command_results:
+                cmd_result = command_results['routing']
+                
+                for item in cmd_result.get('added', []):
+                    comprehensive_data.append(self._create_routing_row(
+                        ip_mgmt, hostname, model_sw, item, "Added"
+                    ))
+                
+                for item in cmd_result.get('removed', []):
+                    comprehensive_data.append(self._create_routing_row(
+                        ip_mgmt, hostname, model_sw, item, "Removed"
+                    ))
+                
+                for item in cmd_result.get('modified', []):
+                    comprehensive_data.append(self._create_routing_row(
+                        ip_mgmt, hostname, model_sw, item, "Modified"
+                    ))
+            
+            # Process Switching commands
+            if 'switching' in command_results:
+                cmd_result = command_results['switching']
+                
+                for item in cmd_result.get('added', []):
+                    comprehensive_data.append(self._create_switching_row(
+                        ip_mgmt, hostname, model_sw, item, "Added"
+                    ))
+                
+                for item in cmd_result.get('removed', []):
+                    comprehensive_data.append(self._create_switching_row(
+                        ip_mgmt, hostname, model_sw, item, "Removed"
+                    ))
+                
+                for item in cmd_result.get('modified', []):
+                    comprehensive_data.append(self._create_switching_row(
+                        ip_mgmt, hostname, model_sw, item, "Modified"
+                    ))
+            
+            # Process System Info commands
+            if 'system_info' in command_results:
+                cmd_result = command_results['system_info']
+                
+                for item in cmd_result.get('added', []):
+                    comprehensive_data.append(self._create_system_row(
+                        ip_mgmt, hostname, model_sw, item, "Added"
+                    ))
+                
+                for item in cmd_result.get('removed', []):
+                    comprehensive_data.append(self._create_system_row(
+                        ip_mgmt, hostname, model_sw, item, "Removed"
+                    ))
+                
+                for item in cmd_result.get('modified', []):
+                    comprehensive_data.append(self._create_system_row(
+                        ip_mgmt, hostname, model_sw, item, "Modified"
+                    ))
+        
+        return comprehensive_data
+
+    def _create_interface_row(self, ip_mgmt: str, hostname: str, model_sw: str, item: Dict, change_type: str, command_type: str) -> Dict:
+        """Create a row for interface changes."""
+        interface_data = item.get('data', item.get('new_data', item.get('old_data', {})))
+        
+        return {
+            "Type": "Interface",
+            "IP Address": ip_mgmt,
+            "Hostname": hostname,
+            "Model SW": model_sw,
+            "Command": command_type.replace('_', ' ').title(),
+            "Status": "Changed",
+            "Summary": f"Interface {change_type.lower()}",
+            "Added Items": 1 if change_type == "Added" else "",
+            "Removed Items": 1 if change_type == "Removed" else "",
+            "Modified Items": 1 if change_type == "Modified" else "",
+            "Details": item.get('description_text', f"Interface {item.get('interface', 'Unknown')} {change_type.lower()}"),
+            "Interface": item.get('interface', 'Unknown'),
+            "Change Type": change_type,
+            "Attribute Changed": "All" if change_type in ["Added", "Removed"] else "",
+            "Before Value": str(item.get('old_data', '')) if change_type != "Added" else "",
+            "After Value": str(item.get('new_data', '')) if change_type != "Removed" else "",
+            "MAC Address": interface_data.get('physicalAddress', interface_data.get('burnedInAddress', '')),
+            "VLAN": str(interface_data.get('vlanInformation', {}).get('vlanId', '')),
+            "Bandwidth": str(interface_data.get('bandwidth', '')),
+            "Duplex": interface_data.get('duplex', ''),
+            "Line Protocol": interface_data.get('lineProtocolStatus', '')
+        }
+
+    def _create_interface_attribute_row(self, ip_mgmt: str, hostname: str, model_sw: str, item: Dict, attr: Dict, command_type: str) -> Dict:
+        """Create a row for specific interface attribute changes."""
+        interface_data = item.get('new_data', {})
+        
+        return {
+            "Type": "Interface Attribute",
+            "IP Address": ip_mgmt,
+            "Hostname": hostname,
+            "Model SW": model_sw,
+            "Command": command_type.replace('_', ' ').title(),
+            "Status": "Changed",
+            "Summary": f"Attribute {attr['attribute']} changed",
+            "Added Items": "",
+            "Removed Items": "",
+            "Modified Items": 1,
+            "Details": f"Interface {item.get('interface', 'Unknown')}: {attr['attribute']} changed from {attr['before']} to {attr['after']}",
+            "Interface": item.get('interface', 'Unknown'),
+            "Change Type": "Modified",
+            "Attribute Changed": attr['attribute'],
+            "Before Value": str(attr['before']),
+            "After Value": str(attr['after']),
+            "MAC Address": interface_data.get('physicalAddress', interface_data.get('burnedInAddress', '')),
+            "VLAN": str(interface_data.get('vlanInformation', {}).get('vlanId', '')),
+            "Bandwidth": str(interface_data.get('bandwidth', '')),
+            "Duplex": interface_data.get('duplex', ''),
+            "Line Protocol": interface_data.get('lineProtocolStatus', '')
+        }
+
+    def _create_mlag_row(self, ip_mgmt: str, hostname: str, model_sw: str, item: Dict, change_type: str) -> Dict:
+        """Create a row for MLAG changes."""
+        return {
+            "Type": "MLAG",
+            "IP Address": ip_mgmt,
+            "Hostname": hostname,
+            "Model SW": model_sw,
+            "Command": "MLAG",
+            "Status": "Changed",
+            "Summary": f"MLAG {change_type.lower()}",
+            "Added Items": 1 if change_type == "Added" else "",
+            "Removed Items": 1 if change_type == "Removed" else "",
+            "Modified Items": 1 if change_type == "Modified" else "",
+            "Details": item.get('description', f"MLAG {item.get('type', 'Unknown')} {change_type.lower()}"),
+            "Interface": item.get('local_interface', item.get('interface_id', '')),
+            "Change Type": change_type,
+            "Attribute Changed": ', '.join(item.get('changes', [])) if 'changes' in item else "All",
+            "Before Value": str(item.get('before', '')) if change_type != "Added" else "",
+            "After Value": str(item.get('after', '')) if change_type != "Removed" else "",
+            "MAC Address": "",
+            "VLAN": "",
+            "Bandwidth": "",
+            "Duplex": "",
+            "Line Protocol": item.get('status', '')
+        }
+
+    def _create_arp_row(self, ip_mgmt: str, hostname: str, model_sw: str, item: Dict, change_type: str) -> Dict:
+        """Create a row for ARP changes."""
+        return {
+            "Type": "ARP",
+            "IP Address": ip_mgmt,
+            "Hostname": hostname,
+            "Model SW": model_sw,
+            "Command": "Protocols (ARP)",
+            "Status": "Changed",
+            "Summary": f"ARP {change_type.lower()}",
+            "Added Items": 1 if change_type == "Added" else "",
+            "Removed Items": 1 if change_type == "Removed" else "",
+            "Modified Items": 1 if change_type == "Modified" else "",
+            "Details": item.get('description', f"ARP entry {item.get('address', 'Unknown')} {change_type.lower()}"),
+            "Interface": item.get('interface', ''),
+            "Change Type": change_type,
+            "Attribute Changed": ', '.join(item.get('changes', [])) if 'changes' in item else "All",
+            "Before Value": str(item.get('before', '')) if change_type != "Added" else "",
+            "After Value": str(item.get('after', '')) if change_type != "Removed" else "",
+            "MAC Address": item.get('hwAddress', ''),
+            "VLAN": "",
+            "Bandwidth": "",
+            "Duplex": "",
+            "Line Protocol": ""
+        }
+
+    def _create_routing_row(self, ip_mgmt: str, hostname: str, model_sw: str, item: Dict, change_type: str) -> Dict:
+        """Create a row for routing changes."""
+        return {
+            "Type": "Routing",
+            "IP Address": ip_mgmt,
+            "Hostname": hostname,
+            "Model SW": model_sw,
+            "Command": "Routing",
+            "Status": "Changed",
+            "Summary": f"Routing {change_type.lower()}",
+            "Added Items": 1 if change_type == "Added" else "",
+            "Removed Items": 1 if change_type == "Removed" else "",
+            "Modified Items": 1 if change_type == "Modified" else "",
+            "Details": item.get('description', f"Route {item.get('route', 'Unknown')} {change_type.lower()}"),
+            "Interface": item.get('interface', ''),
+            "Change Type": change_type,
+            "Attribute Changed": ', '.join(item.get('changes', [])) if 'changes' in item else "All",
+            "Before Value": str(item.get('before', '')) if change_type != "Added" else "",
+            "After Value": str(item.get('after', '')) if change_type != "Removed" else "",
+            "MAC Address": "",
+            "VLAN": "",
+            "Bandwidth": "",
+            "Duplex": "",
+            "Line Protocol": ""
+        }
+
+    def _create_switching_row(self, ip_mgmt: str, hostname: str, model_sw: str, item: Dict, change_type: str) -> Dict:
+        """Create a row for switching changes."""
+        return {
+            "Type": "Switching",
+            "IP Address": ip_mgmt,
+            "Hostname": hostname,
+            "Model SW": model_sw,
+            "Command": "Switching",
+            "Status": "Changed",
+            "Summary": f"Switching {change_type.lower()}",
+            "Added Items": 1 if change_type == "Added" else "",
+            "Removed Items": 1 if change_type == "Removed" else "",
+            "Modified Items": 1 if change_type == "Modified" else "",
+            "Details": item.get('description', f"Switching entry {change_type.lower()}"),
+            "Interface": item.get('interface', ''),
+            "Change Type": change_type,
+            "Attribute Changed": ', '.join(item.get('changes', [])) if 'changes' in item else "All",
+            "Before Value": str(item.get('before', '')) if change_type != "Added" else "",
+            "After Value": str(item.get('after', '')) if change_type != "Removed" else "",
+            "MAC Address": item.get('mac', item.get('hwAddress', '')),
+            "VLAN": item.get('vlan', ''),
+            "Bandwidth": "",
+            "Duplex": "",
+            "Line Protocol": ""
+        }
+
+    def _create_system_row(self, ip_mgmt: str, hostname: str, model_sw: str, item: Dict, change_type: str) -> Dict:
+        """Create a row for system info changes."""
+        return {
+            "Type": "System",
+            "IP Address": ip_mgmt,
+            "Hostname": hostname,
+            "Model SW": model_sw,
+            "Command": "System Info",
+            "Status": "Changed",
+            "Summary": f"System {change_type.lower()}",
+            "Added Items": 1 if change_type == "Added" else "",
+            "Removed Items": 1 if change_type == "Removed" else "",
+            "Modified Items": 1 if change_type == "Modified" else "",
+            "Details": item.get('description', f"System info {change_type.lower()}"),
+            "Interface": "",
+            "Change Type": change_type,
+            "Attribute Changed": ', '.join(item.get('changes', [])) if 'changes' in item else "All",
+            "Before Value": str(item.get('before', '')) if change_type != "Added" else "",
+            "After Value": str(item.get('after', '')) if change_type != "Removed" else "",
+            "MAC Address": "",
+            "VLAN": "",
+            "Bandwidth": "",
+            "Duplex": "",
+            "Line Protocol": ""
+        }
 
     def _compare_mlag_enhanced(self, first_data: Dict, second_data: Dict) -> Dict:
         """Enhanced MLAG interfaces comparison."""
@@ -1187,6 +2458,88 @@ class DataProcessor:
         
         return differences
 
+    def _get_specific_commands_for_category(self, command_category: str, first_data: Dict, second_data: Dict) -> List[str]:
+        """Get list of specific commands for a given category based on available data."""
+        specific_commands = set()
+        
+        # Collect all specific commands from both datasets
+        if isinstance(first_data, dict):
+            specific_commands.update(first_data.keys())
+        if isinstance(second_data, dict):
+            specific_commands.update(second_data.keys())
+        
+        # Filter out non-command keys (like 'error')
+        specific_commands = [cmd for cmd in specific_commands if not cmd.startswith('error')]
+        
+        logger.debug(f"Found specific commands for category '{command_category}': {specific_commands}")
+        return sorted(specific_commands)
+    
+    def _compare_specific_command_data(self, first_data: Dict, second_data: Dict, specific_command: str, command_category: str) -> Dict:
+        """Compare data for a specific command within a category."""
+        try:
+            differences = {
+                "status": "no_changes",
+                "summary": "",
+                "details": [],
+                "added": [],
+                "removed": [],
+                "modified": [],
+                "statistics": {}
+            }
+            
+            # Route to appropriate comparison method based on command type
+            if command_category == "interfaces":
+                if "status" in specific_command:
+                    differences = self._compare_interface_status_specific(first_data, second_data, specific_command)
+                elif "counters" in specific_command:
+                    differences = self._compare_interface_counters_specific(first_data, second_data, specific_command)
+                elif "description" in specific_command:
+                    differences = self._compare_interface_description_specific(first_data, second_data, specific_command)
+                else:
+                    differences = self._compare_interface_generic_specific(first_data, second_data, specific_command)
+            elif command_category == "mlag":
+                if "config-sanity" in specific_command:
+                    differences = self._compare_mlag_config_sanity_specific(first_data, second_data, specific_command)
+                elif "interfaces detail" in specific_command:
+                    differences = self._compare_mlag_interfaces_specific(first_data, second_data, specific_command)
+                elif "detail" in specific_command:
+                    differences = self._compare_mlag_detail_specific(first_data, second_data, specific_command)
+                else:
+                    differences = self._compare_mlag_generic_specific(first_data, second_data, specific_command)
+            elif command_category == "protocols":
+                if "arp" in specific_command.lower():
+                    differences = self._compare_arp_specific(first_data, second_data, specific_command)
+                elif "ospf" in specific_command.lower():
+                    differences = self._compare_ospf_specific(first_data, second_data, specific_command)
+                elif "bgp" in specific_command.lower():
+                    differences = self._compare_bgp_specific(first_data, second_data, specific_command)
+                elif "lldp" in specific_command.lower():
+                    differences = self._compare_lldp_specific(first_data, second_data, specific_command)
+                else:
+                    differences = self._compare_protocol_generic_specific(first_data, second_data, specific_command)
+            elif command_category == "switching":
+                if "mac address-table" in specific_command:
+                    differences = self._compare_mac_table_specific(first_data, second_data, specific_command)
+                else:
+                    differences = self._compare_switching_generic_specific(first_data, second_data, specific_command)
+            else:
+                # Generic comparison for unknown categories
+                differences = self._generic_specific_comparison(first_data, second_data, specific_command, command_category)
+            
+            return differences
+            
+        except Exception as e:
+            logger.error(f"Error comparing specific command data for '{specific_command}': {e}")
+            return {
+                "status": "error",
+                "summary": f"Error during comparison: {str(e)}",
+                "details": [],
+                "added": [],
+                "removed": [],
+                "modified": [],
+                "statistics": {"error": str(e)}
+            }
+
     def _generic_comparison(self, first_data: Dict, second_data: Dict, command_category: str) -> Dict:
         """Generic comparison for unknown command types."""
         differences = {
@@ -1208,6 +2561,392 @@ class DataProcessor:
                     'type': 'generic_change',
                     'command': command_category,
                     'description': f"Changes detected in {command_category}"
+                })
+                differences["statistics"] = {
+                    'comparison_type': 'generic',
+                    'changed': True
+                }
+            else:
+                differences["statistics"] = {
+                    'comparison_type': 'generic',
+                    'changed': False
+                }
+        except Exception as e:
+            differences["status"] = "error"
+            differences["summary"] = f"Error in generic comparison: {str(e)}"
+            differences["statistics"] = {"error": str(e)}
+        
+        return differences
+
+    def _compare_interface_status_specific(self, first_data: Dict, second_data: Dict, specific_command: str) -> Dict:
+        """Compare interface status data specifically."""
+        differences = {
+            "status": "no_changes",
+            "summary": "",
+            "details": [],
+            "added": [],
+            "removed": [],
+            "modified": [],
+            "statistics": {}
+        }
+        
+        try:
+            first_intfs = first_data.get('interfaceStatuses', {})
+            second_intfs = second_data.get('interfaceStatuses', {})
+            
+            all_interfaces = set(first_intfs.keys()) | set(second_intfs.keys())
+            added_interfaces = set(second_intfs.keys()) - set(first_intfs.keys())
+            removed_interfaces = set(first_intfs.keys()) - set(second_intfs.keys())
+            
+            for intf_name in all_interfaces:
+                if intf_name in added_interfaces:
+                    intf_data = second_intfs[intf_name]
+                    differences["added"].append({
+                        'interface': intf_name,
+                        'data': intf_data,
+                        'description': f"Interface {intf_name} status added"
+                    })
+                elif intf_name in removed_interfaces:
+                    intf_data = first_intfs[intf_name]
+                    differences["removed"].append({
+                        'interface': intf_name,
+                        'data': intf_data,
+                        'description': f"Interface {intf_name} status removed"
+                    })
+                else:
+                    # Check for modifications
+                    first_intf = first_intfs[intf_name]
+                    second_intf = second_intfs[intf_name]
+                    if first_intf != second_intf:
+                        differences["modified"].append({
+                            'interface': intf_name,
+                            'old_data': first_intf,
+                            'new_data': second_intf,
+                            'description': f"Interface {intf_name} status modified"
+                        })
+            
+            # Set status and summary
+            total_changes = len(differences["added"]) + len(differences["removed"]) + len(differences["modified"])
+            if total_changes > 0:
+                differences["status"] = "changed"
+                differences["summary"] = f"Interface status changes: {len(differences['added'])} added, {len(differences['removed'])} removed, {len(differences['modified'])} modified"
+                differences["details"] = [item['description'] for item in differences["added"] + differences["removed"] + differences["modified"]]
+            
+            differences["statistics"] = {
+                "added_count": len(differences["added"]),
+                "removed_count": len(differences["removed"]),
+                "modified_count": len(differences["modified"])
+            }
+            
+        except Exception as e:
+            differences["status"] = "error"
+            differences["summary"] = f"Error comparing interface status: {str(e)}"
+        
+        return differences
+
+    def _compare_interface_counters_specific(self, first_data: Dict, second_data: Dict, specific_command: str) -> Dict:
+        """Compare interface counters data specifically."""
+        differences = {
+            "status": "no_changes",
+            "summary": "",
+            "details": [],
+            "added": [],
+            "removed": [],
+            "modified": [],
+            "statistics": {}
+        }
+        
+        try:
+            first_intfs = first_data.get('interfaces', {})
+            second_intfs = second_data.get('interfaces', {})
+            
+            all_interfaces = set(first_intfs.keys()) | set(second_intfs.keys())
+            added_interfaces = set(second_intfs.keys()) - set(first_intfs.keys())
+            removed_interfaces = set(first_intfs.keys()) - set(second_intfs.keys())
+            
+            for intf_name in all_interfaces:
+                if intf_name in added_interfaces:
+                    intf_data = second_intfs[intf_name]
+                    differences["added"].append({
+                        'interface': intf_name,
+                        'data': intf_data,
+                        'description': f"Interface {intf_name} counters added"
+                    })
+                elif intf_name in removed_interfaces:
+                    intf_data = first_intfs[intf_name]
+                    differences["removed"].append({
+                        'interface': intf_name,
+                        'data': intf_data,
+                        'description': f"Interface {intf_name} counters removed"
+                    })
+                else:
+                    # Check for modifications in counters
+                    first_intf = first_intfs[intf_name]
+                    second_intf = second_intfs[intf_name]
+                    if first_intf != second_intf:
+                        differences["modified"].append({
+                            'interface': intf_name,
+                            'old_data': first_intf,
+                            'new_data': second_intf,
+                            'description': f"Interface {intf_name} counters modified"
+                        })
+            
+            # Set status and summary
+            total_changes = len(differences["added"]) + len(differences["removed"]) + len(differences["modified"])
+            if total_changes > 0:
+                differences["status"] = "changed"
+                differences["summary"] = f"Interface counters changes: {len(differences['added'])} added, {len(differences['removed'])} removed, {len(differences['modified'])} modified"
+                differences["details"] = [item['description'] for item in differences["added"] + differences["removed"] + differences["modified"]]
+            
+            differences["statistics"] = {
+                "added_count": len(differences["added"]),
+                "removed_count": len(differences["removed"]),
+                "modified_count": len(differences["modified"])
+            }
+            
+        except Exception as e:
+            differences["status"] = "error"
+            differences["summary"] = f"Error comparing interface counters: {str(e)}"
+        
+        return differences
+
+    def _compare_interface_description_specific(self, first_data: Dict, second_data: Dict, specific_command: str) -> Dict:
+        """Compare interface description data specifically."""
+        differences = {
+            "status": "no_changes",
+            "summary": "",
+            "details": [],
+            "added": [],
+            "removed": [],
+            "modified": [],
+            "statistics": {}
+        }
+        
+        try:
+            first_intfs = first_data.get('interfaceDescriptions', {})
+            second_intfs = second_data.get('interfaceDescriptions', {})
+            
+            all_interfaces = set(first_intfs.keys()) | set(second_intfs.keys())
+            added_interfaces = set(second_intfs.keys()) - set(first_intfs.keys())
+            removed_interfaces = set(first_intfs.keys()) - set(second_intfs.keys())
+            
+            for intf_name in all_interfaces:
+                if intf_name in added_interfaces:
+                    intf_data = second_intfs[intf_name]
+                    differences["added"].append({
+                        'interface': intf_name,
+                        'data': intf_data,
+                        'description': f"Interface {intf_name} description added"
+                    })
+                elif intf_name in removed_interfaces:
+                    intf_data = first_intfs[intf_name]
+                    differences["removed"].append({
+                        'interface': intf_name,
+                        'data': intf_data,
+                        'description': f"Interface {intf_name} description removed"
+                    })
+                else:
+                    # Check for modifications
+                    first_intf = first_intfs[intf_name]
+                    second_intf = second_intfs[intf_name]
+                    if first_intf != second_intf:
+                        differences["modified"].append({
+                            'interface': intf_name,
+                            'old_data': first_intf,
+                            'new_data': second_intf,
+                            'description': f"Interface {intf_name} description modified"
+                        })
+            
+            # Set status and summary
+            total_changes = len(differences["added"]) + len(differences["removed"]) + len(differences["modified"])
+            if total_changes > 0:
+                differences["status"] = "changed"
+                differences["summary"] = f"Interface description changes: {len(differences['added'])} added, {len(differences['removed'])} removed, {len(differences['modified'])} modified"
+                differences["details"] = [item['description'] for item in differences["added"] + differences["removed"] + differences["modified"]]
+            
+            differences["statistics"] = {
+                "added_count": len(differences["added"]),
+                "removed_count": len(differences["removed"]),
+                "modified_count": len(differences["modified"])
+            }
+            
+        except Exception as e:
+            differences["status"] = "error"
+            differences["summary"] = f"Error comparing interface descriptions: {str(e)}"
+        
+        return differences
+
+    def _compare_interface_generic_specific(self, first_data: Dict, second_data: Dict, specific_command: str) -> Dict:
+        """Generic interface comparison for unknown interface commands."""
+        return self._generic_specific_comparison(first_data, second_data, specific_command, "interfaces")
+
+    def _compare_mlag_config_sanity_specific(self, first_data: Dict, second_data: Dict, specific_command: str) -> Dict:
+        """Compare MLAG config sanity data specifically."""
+        differences = {
+            "status": "no_changes",
+            "summary": "",
+            "details": [],
+            "added": [],
+            "removed": [],
+            "modified": [],
+            "statistics": {}
+        }
+        
+        try:
+            # Compare MLAG config sanity attributes
+            attrs = ['mlagActive', 'mlagConnected', 'globalConfiguration', 'interfaceConfiguration']
+            changes = []
+            
+            for attr in attrs:
+                first_val = first_data.get(attr)
+                second_val = second_data.get(attr)
+                if first_val != second_val:
+                    changes.append(f"{attr}: {first_val} → {second_val}")
+                    differences["modified"].append({
+                        'attribute': attr,
+                        'before': first_val,
+                        'after': second_val,
+                        'description': f"MLAG config sanity {attr} changed from {first_val} to {second_val}"
+                    })
+            
+            if changes:
+                differences["status"] = "changed"
+                differences["summary"] = f"MLAG config sanity modified: {', '.join(changes)}"
+                differences["details"] = [item['description'] for item in differences["modified"]]
+            
+            differences["statistics"] = {
+                "modified_count": len(differences["modified"])
+            }
+            
+        except Exception as e:
+            differences["status"] = "error"
+            differences["summary"] = f"Error comparing MLAG config sanity: {str(e)}"
+        
+        return differences
+
+    def _compare_mlag_interfaces_specific(self, first_data: Dict, second_data: Dict, specific_command: str) -> Dict:
+        """Compare MLAG interfaces detail data specifically."""
+        differences = {
+            "status": "no_changes",
+            "summary": "",
+            "details": [],
+            "added": [],
+            "removed": [],
+            "modified": [],
+            "statistics": {}
+        }
+        
+        try:
+            first_intfs = first_data.get('interfaces', {})
+            second_intfs = second_data.get('interfaces', {})
+            
+            all_mlag_ids = set(first_intfs.keys()) | set(second_intfs.keys())
+            added_mlag_ids = set(second_intfs.keys()) - set(first_intfs.keys())
+            removed_mlag_ids = set(first_intfs.keys()) - set(second_intfs.keys())
+            
+            for mlag_id in all_mlag_ids:
+                if mlag_id in added_mlag_ids:
+                    mlag_data = second_intfs[mlag_id]
+                    differences["added"].append({
+                        'interface': mlag_id,
+                        'data': mlag_data,
+                        'description': f"MLAG interface {mlag_id} added"
+                    })
+                elif mlag_id in removed_mlag_ids:
+                    mlag_data = first_intfs[mlag_id]
+                    differences["removed"].append({
+                        'interface': mlag_id,
+                        'data': mlag_data,
+                        'description': f"MLAG interface {mlag_id} removed"
+                    })
+                else:
+                    # Check for modifications
+                    first_mlag = first_intfs[mlag_id]
+                    second_mlag = second_intfs[mlag_id]
+                    if first_mlag != second_mlag:
+                        differences["modified"].append({
+                            'interface': mlag_id,
+                            'old_data': first_mlag,
+                            'new_data': second_mlag,
+                            'description': f"MLAG interface {mlag_id} modified"
+                        })
+            
+            # Set status and summary
+            total_changes = len(differences["added"]) + len(differences["removed"]) + len(differences["modified"])
+            if total_changes > 0:
+                differences["status"] = "changed"
+                differences["summary"] = f"MLAG interfaces changes: {len(differences['added'])} added, {len(differences['removed'])} removed, {len(differences['modified'])} modified"
+                differences["details"] = [item['description'] for item in differences["added"] + differences["removed"] + differences["modified"]]
+            
+            differences["statistics"] = {
+                "added_count": len(differences["added"]),
+                "removed_count": len(differences["removed"]),
+                "modified_count": len(differences["modified"])
+            }
+            
+        except Exception as e:
+            differences["status"] = "error"
+            differences["summary"] = f"Error comparing MLAG interfaces: {str(e)}"
+        
+        return differences
+
+    def _compare_mlag_detail_specific(self, first_data: Dict, second_data: Dict, specific_command: str) -> Dict:
+        """Compare MLAG detail data specifically."""
+        return self._generic_specific_comparison(first_data, second_data, specific_command, "mlag")
+
+    def _compare_mlag_generic_specific(self, first_data: Dict, second_data: Dict, specific_command: str) -> Dict:
+        """Generic MLAG comparison for unknown MLAG commands."""
+        return self._generic_specific_comparison(first_data, second_data, specific_command, "mlag")
+
+    def _compare_arp_specific(self, first_data: Dict, second_data: Dict, specific_command: str) -> Dict:
+        """Compare ARP data specifically."""
+        return self._generic_specific_comparison(first_data, second_data, specific_command, "protocols")
+
+    def _compare_ospf_specific(self, first_data: Dict, second_data: Dict, specific_command: str) -> Dict:
+        """Compare OSPF data specifically."""
+        return self._generic_specific_comparison(first_data, second_data, specific_command, "protocols")
+
+    def _compare_bgp_specific(self, first_data: Dict, second_data: Dict, specific_command: str) -> Dict:
+        """Compare BGP data specifically."""
+        return self._generic_specific_comparison(first_data, second_data, specific_command, "protocols")
+
+    def _compare_lldp_specific(self, first_data: Dict, second_data: Dict, specific_command: str) -> Dict:
+        """Compare LLDP data specifically."""
+        return self._generic_specific_comparison(first_data, second_data, specific_command, "protocols")
+
+    def _compare_protocol_generic_specific(self, first_data: Dict, second_data: Dict, specific_command: str) -> Dict:
+        """Generic protocol comparison for unknown protocol commands."""
+        return self._generic_specific_comparison(first_data, second_data, specific_command, "protocols")
+
+    def _compare_mac_table_specific(self, first_data: Dict, second_data: Dict, specific_command: str) -> Dict:
+        """Compare MAC address table data specifically."""
+        return self._generic_specific_comparison(first_data, second_data, specific_command, "switching")
+
+    def _compare_switching_generic_specific(self, first_data: Dict, second_data: Dict, specific_command: str) -> Dict:
+        """Generic switching comparison for unknown switching commands."""
+        return self._generic_specific_comparison(first_data, second_data, specific_command, "switching")
+
+    def _generic_specific_comparison(self, first_data: Dict, second_data: Dict, specific_command: str, command_category: str) -> Dict:
+        """Generic comparison for any specific command."""
+        differences = {
+            "status": "no_changes",
+            "summary": "",
+            "details": [],
+            "added": [],
+            "removed": [],
+            "modified": [],
+            "statistics": {}
+        }
+        
+        try:
+            if first_data != second_data:
+                differences["status"] = "changed"
+                differences["summary"] = f"{specific_command} data has changed between snapshots"
+                differences["details"] = [f"Changes detected in {specific_command}"]
+                differences["modified"].append({
+                    'type': 'generic_change',
+                    'command': specific_command,
+                    'description': f"Changes detected in {specific_command}"
                 })
                 differences["statistics"] = {
                     'comparison_type': 'generic',
@@ -1325,6 +3064,18 @@ def get_csv_separator(file_path: str):
         logger.warning(f"Could not detect separator for {file_path}, defaulting to comma. Error: {e}")
         return ','
 
+def get_csv_separator_from_content(file_content: str):
+    """Detects the separator of a CSV file from content string."""
+    try:
+        header = file_content.split('\n')[0]
+        separators = {',': header.count(','), ';': header.count(';'), '\t': header.count('\t'), '|': header.count('|')}
+        separator = max(separators.items(), key=lambda x: x[1])[0]
+        logger.info(f"Detected CSV separator from content: '{separator}'")
+        return separator
+    except Exception as e:
+        logger.warning(f"Could not detect separator from content, defaulting to comma. Error: {e}")
+        return ','
+
 def process_single_device_with_retry(device_info: DeviceInfo, metadata: DeviceMetadata, session: ProcessingSession, device_manager: NetworkDeviceAPIManager, selected_commands: List[str] = None):
     """Process a single device with retry mechanism using APIs."""
     retry_count = 0
@@ -1418,7 +3169,7 @@ def process_single_device_with_retry(device_info: DeviceInfo, metadata: DeviceMe
                 time.sleep(2)
                 continue
 
-def threaded_process_devices(username: str, password: str, file_path: str, session_id: str, selected_commands: List[str] = None, retry_failed_only: bool = False):
+def threaded_process_devices(username: str, password: str, file_content: str, session_id: str, selected_commands: List[str] = None, retry_failed_only: bool = False):
     """Threaded processing with retry mechanism and progress tracking using APIs."""
     try:
         session = processing_sessions[session_id]
@@ -1429,8 +3180,10 @@ def threaded_process_devices(username: str, password: str, file_path: str, sessi
         if retry_failed_only:
             logger.info("Retrying failed devices only")
         
-        separator = get_csv_separator(file_path)
-        df = pd.read_csv(file_path, sep=separator)
+        separator = get_csv_separator_from_content(file_content)
+        from io import StringIO
+        csv_io = StringIO(file_content)
+        df = pd.read_csv(csv_io, sep=separator)
         df.columns = [col.strip() for col in df.columns]
 
         errors, warnings, column_mapping = validate_csv_columns(df)
@@ -1493,7 +3246,7 @@ def threaded_process_devices(username: str, password: str, file_path: str, sessi
         session.output_file = output_filename
         
         response = {
-            "status": "success" if not session.is_stopped else "stopped",
+            "status": "info" if not session.is_stopped else "stopped",
             "message": f"API processing complete: {session.successful} successful, {session.failed} failed. Results saved to {Path(output_filename).name}",
             "data": [asdict(result) for result in results],
             "session_id": session_id,
@@ -1682,6 +3435,99 @@ def get_comparison_commands():
             "message": f"Failed to get comparison commands: {str(e)}"
         }), 500
 
+def detect_vendors_from_data(data_list):
+    """Detect vendors from device data based on model_sw field."""
+    detected_vendors = set()
+    
+    for item in data_list:
+        model_sw = ""
+        
+        # Handle different data structures
+        if isinstance(item, dict):
+            model_sw = item.get('model_sw', item.get('Model SW', item.get('Model', '')))
+        elif hasattr(item, 'model_sw'):
+            model_sw = item.model_sw
+        
+        if model_sw:
+            # Use the same detection logic as the device manager
+            vendor = detect_device_type_by_model_static(model_sw)
+            detected_vendors.add(vendor)
+    
+    return list(detected_vendors)
+
+def detect_device_type_by_model_static(model_sw: str) -> str:
+    """Static version of device type detection based on model string."""
+    model_upper = model_sw.upper()
+    
+    for device_type, patterns in VENDOR_DETECTION_MAP.items():
+        for pattern in patterns:
+            if pattern.upper() in model_upper:
+                return device_type
+    
+    # Default to arista_eos if no match found
+    return "arista_eos"
+
+@app.route('/api/commands_filtered', methods=['POST'])
+def get_commands_filtered():
+    """Get available commands filtered by detected vendors from uploaded data."""
+    try:
+        data = request.get_json()
+        device_data = data.get('device_data', [])
+        command_type = data.get('command_type', 'execution')  # 'execution' or 'comparison'
+        
+        if not device_data:
+            # Return all commands if no data provided
+            if command_type == 'comparison':
+                all_commands = config_manager.get_comparison_commands()
+            else:
+                all_commands = config_manager.get_commands()
+            
+            return jsonify({
+                "status": "success",
+                "data": all_commands,
+                "detected_vendors": []
+            })
+        
+        # Detect vendors from device data
+        detected_vendors = detect_vendors_from_data(device_data)
+        
+        # Get filtered commands based on detected vendors
+        if command_type == 'comparison':
+            all_commands = config_manager.get_comparison_commands()
+        else:
+            all_commands = config_manager.get_execution_commands()
+        
+        filtered_commands = {}
+        
+        for vendor in detected_vendors:
+            for command_key, command_info in all_commands.items():
+                if command_key.startswith(f"{vendor}_"):
+                    filtered_commands[command_key] = command_info
+        
+        # If no vendors detected or no matching commands, return Arista as default
+        if not filtered_commands:
+            for command_key, command_info in all_commands.items():
+                if command_key.startswith("arista_eos_"):
+                    filtered_commands[command_key] = command_info
+            detected_vendors = ["arista_eos"]
+        
+        logger.info(f"Detected vendors from data: {detected_vendors}")
+        logger.info(f"Filtered {command_type} commands: {list(filtered_commands.keys())}")
+        
+        return jsonify({
+            "status": "success",
+            "data": filtered_commands,
+            "detected_vendors": detected_vendors,
+            "command_type": command_type
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting filtered commands: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to get filtered commands: {str(e)}"
+        }), 500
+
 @app.route('/api/logs/stream')
 def stream_logs():
     """Stream logs using Server-Sent Events."""
@@ -1753,21 +3599,19 @@ def upload_csv():
             return jsonify({"status": "error", "message": "No file selected"}), 400
         
         if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{timestamp}_{filename}"
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(filepath)
-            
+            # Process CSV in memory without saving to disk
             try:
-                separator = get_csv_separator(filepath)
-                df = pd.read_csv(filepath, sep=separator)
+                # Read file content into memory
+                file_content = file.read()
+                file.seek(0)  # Reset file pointer for pd.read_csv
+                
+                separator = get_csv_separator_from_content(file_content.decode('utf-8'))
+                df = pd.read_csv(file, sep=separator)
                 df.columns = [col.strip() for col in df.columns]
                 
                 errors, warnings, column_mapping = validate_csv_columns(df)
                 
                 if errors:
-                    os.remove(filepath)
                     error_message = "CSV validation failed:\n" + "\n".join(errors)
                     if warnings:
                         error_message += f"\n\nWarnings: {len(warnings)} issues found"
@@ -1780,17 +3624,20 @@ def upload_csv():
                 
                 device_count = len(df)
                 
+                # Detect vendors from uploaded data
+                device_data = df.to_dict('records')
+                detected_vendors = detect_vendors_from_data(device_data)
+                
                 return jsonify({
                     "status": "success",
-                    "message": f"File uploaded successfully. {device_count} devices found.",
-                    "filepath": filepath,
+                    "message": f"File processed successfully. {device_count} devices found.",
+                    "file_content": file_content.decode('utf-8'),  # Store content in memory
                     "device_count": device_count,
+                    "detected_vendors": detected_vendors,
                     "warnings": warnings[:10] if warnings else []
                 })
                 
             except Exception as e:
-                if os.path.exists(filepath):
-                    os.remove(filepath)
                 return jsonify({
                     "status": "error",
                     "message": f"Error reading CSV: {str(e)}"
@@ -1809,7 +3656,7 @@ def process_devices_from_file():
         data = request.get_json()
         username = data.get('username', '').strip()
         password = data.get('password', '').strip()
-        filepath = data.get('filepath', '')
+        file_content = data.get('file_content', '')
         selected_commands = data.get('selected_commands', [])
         retry_failed_only = data.get('retry_failed_only', False)
         
@@ -1819,15 +3666,18 @@ def process_devices_from_file():
                 "message": "Username and password are required for API authentication"
             }), 400
         
-        if not filepath or not os.path.exists(filepath):
+        if not file_content:
             return jsonify({
                 "status": "error",
-                "message": "No valid file found. Please upload a CSV file first."
+                "message": "No valid file content found. Please upload a CSV file first."
             }), 400
         
         try:
-            separator = get_csv_separator(filepath)
-            full_df = pd.read_csv(filepath, sep=separator)
+            separator = get_csv_separator_from_content(file_content)
+            # Create a StringIO object from the content
+            from io import StringIO
+            csv_io = StringIO(file_content)
+            full_df = pd.read_csv(csv_io, sep=separator)
             device_count = len(full_df)
             
             if device_count == 0:
@@ -1852,7 +3702,7 @@ def process_devices_from_file():
         
         thread = threading.Thread(
             target=threaded_process_devices,
-            args=(username, password, filepath, session_id, selected_commands, retry_failed_only)
+            args=(username, password, file_content, session_id, selected_commands, retry_failed_only)
         )
         thread.daemon = True
         thread.start()
@@ -1938,17 +3788,45 @@ def compare_files():
             }), 404
         
         # Load both files
-        first_data = data_processor.load_results(first_file_path)
-        second_data = data_processor.load_results(second_file_path)
+        first_data_full = data_processor.load_results(first_file_path)
+        second_data_full = data_processor.load_results(second_file_path)
         
-        # Handle both old and new format with metadata
-        if 'results' in first_data:
-            first_data = first_data['results']
-        if 'results' in second_data:
-            second_data = second_data['results']
+        # Extract metadata and results
+        first_metadata = first_data_full.get('metadata', {}) if isinstance(first_data_full, dict) else {}
+        second_metadata = second_data_full.get('metadata', {}) if isinstance(second_data_full, dict) else {}
         
-        # Get available commands for comparison
-        available_commands = list(config_manager.get_comparison_commands().keys())
+        first_data = first_data_full.get('results', first_data_full) if isinstance(first_data_full, dict) and 'results' in first_data_full else first_data_full
+        second_data = second_data_full.get('results', second_data_full) if isinstance(second_data_full, dict) and 'results' in second_data_full else second_data_full
+        
+        # Get selected commands from metadata, fallback to first file metadata if second doesn't have it
+        selected_commands = first_metadata.get('selected_commands', second_metadata.get('selected_commands', []))
+        
+        # Get available commands by checking what data actually exists in the files
+        available_commands = set()
+        
+        # Check all devices in both files to see what command categories have actual data (not just errors)
+        for device_data in first_data + second_data:
+            if device_data.get("data"):
+                for category, category_data in device_data["data"].items():
+                    # Only include categories that have actual data, not just error messages
+                    if isinstance(category_data, dict) and category_data:
+                        # Check if it's not just an error message
+                        if not (len(category_data) == 1 and "error" in category_data):
+                            available_commands.add(category)
+        
+        # Convert to list and filter by comparison commands
+        # Create a mapping from category to comparison commands
+        comparison_commands = config_manager.get_comparison_commands()
+        valid_categories = set()
+        for cmd_key, cmd_info in comparison_commands.items():
+            valid_categories.add(cmd_info['category'])
+        
+        # Filter available commands by checking if the category exists in comparison commands
+        available_commands = [cmd for cmd in available_commands if cmd in valid_categories]
+        
+        logger.info(f"Valid comparison categories: {sorted(valid_categories)}")
+        logger.info(f"Available commands based on actual data: {available_commands}")
+        logger.info(f"Found {len(available_commands)} command categories with data to compare")
         
         # Create device mapping
         first_devices = {item["ip_mgmt"]: item for item in first_data}
@@ -1964,38 +3842,43 @@ def compare_files():
                 device_result = {
                     "ip_mgmt": ip,
                     "hostname": first_device.get("nama_sw", "Unknown"),
+                    "model_sw": first_device.get("model_sw", "Unknown"),
                     "overall_status": "no_changes",
                     "command_results": {}
                 }
                 
                 has_changes = False
                 
-                # Compare each available command
+                # Compare each available command by breaking down categories into specific commands
                 for command_category in available_commands:
                     first_cmd_data = first_device.get("data", {}).get(command_category, {})
                     second_cmd_data = second_device.get("data", {}).get(command_category, {})
                     
-                    # Compare the data for this command
-                    compare_result = data_processor._compare_command_data(
-                        first_cmd_data, second_cmd_data, command_category
+                    # Get specific commands for this category and compare them individually
+                    specific_commands = data_processor._get_specific_commands_for_category(
+                        command_category, first_cmd_data, second_cmd_data
                     )
                     
-                    device_result["command_results"][command_category] = compare_result
-                    
-                    if compare_result["status"] != "no_changes":
-                        has_changes = True
+                    # Compare each specific command
+                    for specific_command in specific_commands:
+                        first_specific_data = first_cmd_data.get(specific_command, {})
+                        second_specific_data = second_cmd_data.get(specific_command, {})
+                        
+                        # Only compare if at least one has data
+                        if first_specific_data or second_specific_data:
+                            compare_result = data_processor._compare_specific_command_data(
+                                first_specific_data, second_specific_data, specific_command, command_category
+                            )
+                            
+                            device_result["command_results"][specific_command] = compare_result
+                            
+                            if compare_result["status"] != "no_changes":
+                                has_changes = True
                 
                 device_result["overall_status"] = "changed" if has_changes else "no_changes"
                 comparison_results.append(device_result)
         
-        # Export to Excel with enhanced format
-        excel_filename = None
-        if export_excel and comparison_results:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            excel_filename = f"comparison_{timestamp}.xlsx"
-            excel_path = os.path.join(data_processor.output_dir, excel_filename)
-            
-            data_processor.export_to_excel_comparison(comparison_results, excel_path)
+        # Note: Auto-export removed - users can manually download via separate endpoint
         
         return jsonify({
             "status": "success",
@@ -2003,8 +3886,7 @@ def compare_files():
             "first_file": first_file,
             "second_file": second_file,
             "total_compared": len(comparison_results),
-            "available_commands": available_commands,
-            "excel_file": excel_filename
+            "available_commands": available_commands
         })
         
     except Exception as e:
@@ -2595,11 +4477,78 @@ def compare_snapshots():
                     "compare_result": compare_result
                 })
         
-        # Export to Excel
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        excel_filename = f"snapshot_comparison_{command_category}_{timestamp}.xlsx"
-        excel_path = os.path.join(data_processor.output_dir, excel_filename)
+        # Note: Auto-export removed - users can manually download via separate endpoint
         
+        return jsonify({
+            "status": "success",
+            "data": comparison_results
+        })
+        
+    except Exception as e:
+        logger.error(f"Error comparing snapshots: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"Error comparing snapshots: {str(e)}"
+        }), 500
+
+@app.route('/api/export_comparison_excel', methods=['POST'])
+def export_comparison_excel():
+    """Generate and download comparison Excel file on demand."""
+    try:
+        data = request.get_json()
+        comparison_results = data.get('comparison_results', [])
+        first_file = data.get('first_file', 'file1')
+        second_file = data.get('second_file', 'file2')
+        
+        if not comparison_results:
+            return jsonify({
+                "status": "error",
+                "message": "No comparison data to export"
+            }), 400
+        
+        # Generate filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"comparison_{timestamp}.xlsx"
+        filepath = os.path.join(data_processor.output_dir, filename)
+        
+        # Generate Excel file
+        data_processor.export_to_excel_comparison(comparison_results, filepath)
+        
+        # Return file for download
+        return send_file(
+            filepath,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error exporting comparison Excel: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"Error generating Excel file: {str(e)}"
+        }), 500
+
+@app.route('/api/export_snapshot_comparison_excel', methods=['POST'])
+def export_snapshot_comparison_excel():
+    """Generate and download snapshot comparison Excel file on demand."""
+    try:
+        data = request.get_json()
+        comparison_results = data.get('comparison_results', [])
+        command_category = data.get('command_category', 'unknown')
+        
+        if not comparison_results:
+            return jsonify({
+                "status": "error",
+                "message": "No comparison data to export"
+            }), 400
+        
+        # Generate filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"snapshot_comparison_{command_category}_{timestamp}.xlsx"
+        filepath = os.path.join(data_processor.output_dir, filename)
+        
+        # Create Excel data
         excel_data = []
         for result in comparison_results:
             excel_data.append({
@@ -2610,22 +4559,38 @@ def compare_snapshots():
                 "Details": "; ".join(result["compare_result"]["details"]) if result["compare_result"]["details"] else ""
             })
         
+        # Create Excel file
         df = pd.DataFrame(excel_data)
-        df.to_excel(excel_path, index=False, engine=EXCEL_ENGINE)
+        df.to_excel(filepath, index=False, engine=EXCEL_ENGINE)
         
-        return jsonify({
-            "status": "success",
-            "data": comparison_results,
-            "total_compared": len(comparison_results),
-            "excel_file": excel_filename
-        })
+        # Return file for download
+        return send_file(
+            filepath,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
         
     except Exception as e:
-        logger.error(f"Error comparing snapshots: {e}")
+        logger.error(f"Error exporting snapshot comparison Excel: {e}")
         return jsonify({
             "status": "error",
-            "message": f"Error comparing snapshots: {str(e)}"
+            "message": f"Error generating Excel file: {str(e)}"
         }), 500
+
+# Additional helper function if needed for snapshot comparison
+def create_snapshot_comparison_data(comparison_results, command_category):
+    """Create snapshot comparison data structure for potential future use"""
+    excel_data = []
+    for result in comparison_results:
+        excel_data.append({
+            "IP": result["ip_mgmt"],
+            "Hostname": result["hostname"],
+            "Status": result["compare_result"]["status"],
+            "Summary": result["compare_result"]["summary"],
+            "Details": "; ".join(result["compare_result"]["details"]) if result["compare_result"]["details"] else ""
+        })
+    return excel_data
 
 @app.route('/api/export_excel', methods=['POST'])
 def export_excel():

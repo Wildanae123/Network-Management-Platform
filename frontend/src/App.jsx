@@ -78,7 +78,6 @@ const isDevelopment =
 const API_BASE_URL = isDevelopment ? "/api" : "/api";
 
 console.log(`Running in ${isDevelopment ? "development" : "production"} mode`);
-console.log(`API Base URL: ${API_BASE_URL}`);
 
 // API Helper Functions
 const api = {
@@ -125,6 +124,16 @@ const api = {
     return this.request("/comparison_commands");
   },
 
+  async getFilteredCommands(deviceData, commandType = "execution") {
+    return this.request("/commands_filtered", {
+      method: "POST",
+      body: JSON.stringify({
+        device_data: deviceData,
+        command_type: commandType,
+      }),
+    });
+  },
+
   async generateComparisonChart(data, chartType) {
     return this.request("/generate_comparison_chart", {
       method: "POST",
@@ -158,11 +167,11 @@ const api = {
   async processDevicesFromFile(
     username,
     password,
-    filepath = null,
+    fileContent = null,
     selectedCommands = [],
     retryFailedOnly = false
   ) {
-    if (isDevelopment && window.pywebview && !filepath) {
+    if (isDevelopment && window.pywebview && !fileContent) {
       return await window.pywebview.api.process_devices_from_file(
         username,
         password
@@ -173,7 +182,7 @@ const api = {
         body: JSON.stringify({
           username,
           password,
-          filepath,
+          file_content: fileContent,
           selected_commands: selectedCommands,
           retry_failed_only: retryFailedOnly,
         }),
@@ -435,6 +444,12 @@ const FileUploadComponent = ({
               <h4>File Uploaded Successfully</h4>
               <p>{uploadedFile.name}</p>
               <small>{uploadedFile.deviceCount} devices found</small>
+              {uploadedFile.detectedVendors &&
+                uploadedFile.detectedVendors.length > 0 && (
+                  <small className="detected-vendors">
+                    Vendors: {uploadedFile.detectedVendors.join(", ")}
+                  </small>
+                )}
             </div>
             {onFileRemove && (
               <button
@@ -522,7 +537,9 @@ const CommandSelectionComponent = ({
               onChange={handleSelectAll}
               disabled={disabled}
             />
-            <span>Select All ({selectedCount}/{totalCommands})</span>
+            <span>
+              Select All ({selectedCount}/{totalCommands})
+            </span>
           </label>
         </div>
       </div>
@@ -591,6 +608,21 @@ const LoadingOverlay = ({ message, isVisible, apiStatus, progress }) => {
 
 // Alert component
 const Alert = ({ info, onClose }) => {
+  React.useEffect(() => {
+    if (info) {
+      document.documentElement.classList.add('modal-open');
+      document.body.classList.add('modal-open');
+    } else {
+      document.documentElement.classList.remove('modal-open');
+      document.body.classList.remove('modal-open');
+    }
+    
+    return () => {
+      document.documentElement.classList.remove('modal-open');
+      document.body.classList.remove('modal-open');
+    };
+  }, [info]);
+
   if (!info) return null;
   return (
     <div className="alert-dialog-backdrop" onClick={onClose}>
@@ -614,7 +646,7 @@ const Alert = ({ info, onClose }) => {
             <X size={24} />
           </button>
         </div>
-        <p className="alert-message">{info.message}</p>
+        <p className="alert-message" style={{ whiteSpace: 'pre-line' }}>{info.message}</p>
         <button className="alert-ok-button" onClick={onClose}>
           OK
         </button>
@@ -625,6 +657,21 @@ const Alert = ({ info, onClose }) => {
 
 // Modal for showing detailed data
 const DetailModal = ({ data, onClose, title = "Device Command Output" }) => {
+  React.useEffect(() => {
+    if (data) {
+      document.documentElement.classList.add('modal-open');
+      document.body.classList.add('modal-open');
+    } else {
+      document.documentElement.classList.remove('modal-open');
+      document.body.classList.remove('modal-open');
+    }
+    
+    return () => {
+      document.documentElement.classList.remove('modal-open');
+      document.body.classList.remove('modal-open');
+    };
+  }, [data]);
+
   if (!data) return null;
   const formattedData =
     typeof data === "object" ? JSON.stringify(data, null, 2) : String(data);
@@ -648,13 +695,71 @@ const DetailModal = ({ data, onClose, title = "Device Command Output" }) => {
   );
 };
 
-// Enhanced File Comparison Modal with better change display
-const ComparisonModal = ({ comparisonData, onClose }) => {
+// Helper function to get device change summary
+const getDeviceChangeSummary = (commandResults) => {
+  let totalAdded = 0;
+  let totalRemoved = 0;
+  let totalModified = 0;
+
+  Object.values(commandResults).forEach((result) => {
+    if (result.statistics) {
+      totalAdded +=
+        result.statistics.added_count ||
+        result.statistics.added_interfaces ||
+        0;
+      totalRemoved +=
+        result.statistics.removed_count ||
+        result.statistics.removed_interfaces ||
+        0;
+      totalModified +=
+        result.statistics.modified_count ||
+        result.statistics.modified_interfaces ||
+        0;
+    }
+
+    // Also check for direct arrays in case statistics are not available
+    if (result.added) {
+      totalAdded += result.added.length;
+    }
+    if (result.removed) {
+      totalRemoved += result.removed.length;
+    }
+    if (result.modified) {
+      totalModified += result.modified.length;
+    }
+  });
+
+  return {
+    added: totalAdded,
+    removed: totalRemoved,
+    modified: totalModified,
+    total: totalAdded + totalRemoved + totalModified,
+  };
+};
+
+// Redesigned File Comparison Modal
+const ComparisonModal = ({ comparisonData, onClose, onDownloadExcel }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCommand, setSelectedCommand] = useState("all");
 
+  React.useEffect(() => {
+    if (comparisonData) {
+      document.documentElement.classList.add('modal-open');
+      document.body.classList.add('modal-open');
+    } else {
+      document.documentElement.classList.remove('modal-open');
+      document.body.classList.remove('modal-open');
+    }
+    
+    return () => {
+      document.documentElement.classList.remove('modal-open');
+      document.body.classList.remove('modal-open');
+    };
+  }, [comparisonData]);
+
   if (!comparisonData) return null;
 
+  // Filter devices based on search term
   const filteredData =
     comparisonData.data?.filter(
       (device) =>
@@ -662,244 +767,461 @@ const ComparisonModal = ({ comparisonData, onClose }) => {
         device.hostname?.toLowerCase().includes(searchTerm.toLowerCase())
     ) || [];
 
+  // Get only commands that were actually compared (user selected commands)
   const availableCommands = comparisonData.available_commands || [];
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
-        className="modal-content xl-modal"
+        className="modal-content xl-modal comparison-modal-redesigned"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
           <h2>
             <GitCompare size={24} />
-            Enhanced File Comparison Results
+            File Comparison Results
           </h2>
           <button className="modal-close-btn" onClick={onClose}>
             &times;
           </button>
         </div>
+
         <div className="modal-body">
-          <div className="comparison-summary">
-            <p>
-              Comparing: <strong>{comparisonData.first_file}</strong> vs{" "}
-              <strong>{comparisonData.second_file}</strong>
-            </p>
-            <p>
-              Total devices compared:{" "}
-              <strong>{comparisonData.total_compared}</strong>
-            </p>
-            <p>
-              Commands compared: <strong>{availableCommands.join(", ")}</strong>
-            </p>
-            {comparisonData.excel_file && (
-              <button
-                className="download-button"
-                onClick={() => api.downloadFile(comparisonData.excel_file)}
-              >
-                <Download size={16} />
-                Download Enhanced Excel Report
-              </button>
-            )}
-          </div>
-
-          <div className="comparison-controls">
-            <div className="search-box">
-              <Search size={16} />
-              <input
-                type="text"
-                placeholder="Search devices..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <div className="filter-group">
-              <label>Filter by command:</label>
-              <select
-                value={selectedCommand}
-                onChange={(e) => setSelectedCommand(e.target.value)}
-              >
-                <option value="all">All Commands</option>
-                {availableCommands.map((cmd) => (
-                  <option key={cmd} value={cmd}>
-                    {cmd.replace("_", " ").toUpperCase()}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="comparison-results">
-            {filteredData.map((device, index) => (
-              <div key={index} className="comparison-item">
-                <div className="device-header">
-                  <h4>
-                    {device.ip_mgmt} - {device.hostname}
-                  </h4>
-                  <span
-                    className={`status-badge ${device.overall_status?.toLowerCase()}`}
-                  >
-                    {device.overall_status}
-                  </span>
+          {/* Top Section - Summary and Filters in one row */}
+          <div className="comparison-top-section">
+            {/* Comparison Summary */}
+            <div className="comparison-summary-redesigned">
+              <div>
+                <div className="summary-row">
+                  <span>Comparing:</span>
+                  <strong>{comparisonData.first_file}</strong> vs{" "}
+                  <strong>{comparisonData.second_file}</strong>
                 </div>
-                <div className="device-details">
-                  {Object.entries(device.command_results || {}).map(
-                    ([command, result]) => {
-                      if (
-                        selectedCommand !== "all" &&
-                        command !== selectedCommand
-                      ) {
-                        return null;
-                      }
-                      return (
-                        <div key={command} className="command-comparison">
-                          <h5>{command.replace("_", " ").toUpperCase()}</h5>
-                          <div
-                            className={`comparison-status status-${result.status}`}
-                          >
-                            Status: <strong>{result.status}</strong>
-                          </div>
-                          <p>{result.summary}</p>
-
-                          {/* Enhanced statistics display */}
-                          {result.statistics && (
-                            <div className="statistics-summary">
-                              {result.statistics.added_count !== undefined && (
-                                <span className="stat-item added">
-                                  Added: {result.statistics.added_count}
-                                </span>
-                              )}
-                              {result.statistics.removed_count !==
-                                undefined && (
-                                <span className="stat-item removed">
-                                  Removed: {result.statistics.removed_count}
-                                </span>
-                              )}
-                              {result.statistics.modified_count !==
-                                undefined && (
-                                <span className="stat-item modified">
-                                  Modified: {result.statistics.modified_count}
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Enhanced changes display */}
-                          {(result.added?.length > 0 ||
-                            result.removed?.length > 0 ||
-                            result.modified?.length > 0) && (
-                            <div className="comparison-changes-detailed">
-                              {result.added?.length > 0 && (
-                                <div className="changes-category">
-                                  <h5>Added Items ({result.added.length})</h5>
-                                  <div className="changes-list-enhanced">
-                                    {result.added
-                                      .slice(0, 5)
-                                      .map((item, idx) => (
-                                        <div
-                                          key={idx}
-                                          className="change-item added"
-                                        >
-                                          {item.description ||
-                                            JSON.stringify(item)}
-                                        </div>
-                                      ))}
-                                    {result.added.length > 5 && (
-                                      <div className="change-item">
-                                        ... and {result.added.length - 5} more
-                                        added items
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-
-                              {result.removed?.length > 0 && (
-                                <div className="changes-category">
-                                  <h5>
-                                    Removed Items ({result.removed.length})
-                                  </h5>
-                                  <div className="changes-list-enhanced">
-                                    {result.removed
-                                      .slice(0, 5)
-                                      .map((item, idx) => (
-                                        <div
-                                          key={idx}
-                                          className="change-item removed"
-                                        >
-                                          {item.description ||
-                                            JSON.stringify(item)}
-                                        </div>
-                                      ))}
-                                    {result.removed.length > 5 && (
-                                      <div className="change-item">
-                                        ... and {result.removed.length - 5} more
-                                        removed items
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-
-                              {result.modified?.length > 0 && (
-                                <div className="changes-category">
-                                  <h5>
-                                    Modified Items ({result.modified.length})
-                                  </h5>
-                                  <div className="changes-list-enhanced">
-                                    {result.modified
-                                      .slice(0, 5)
-                                      .map((item, idx) => (
-                                        <div
-                                          key={idx}
-                                          className="change-item modified"
-                                        >
-                                          {item.description ||
-                                            JSON.stringify(item)}
-                                        </div>
-                                      ))}
-                                    {result.modified.length > 5 && (
-                                      <div className="change-item">
-                                        ... and {result.modified.length - 5}{" "}
-                                        more modified items
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Legacy details display as fallback */}
-                          {result.details &&
-                            result.details.length > 0 &&
-                            !result.added &&
-                            !result.removed &&
-                            !result.modified && (
-                              <div className="changes-list">
-                                <h6>Changes:</h6>
-                                <ul>
-                                  {result.details
-                                    .slice(0, 5)
-                                    .map((detail, idx) => (
-                                      <li key={idx}>{detail}</li>
-                                    ))}
-                                  {result.details.length > 5 && (
-                                    <li className="more-changes">
-                                      ... and {result.details.length - 5} more
-                                      changes
-                                    </li>
-                                  )}
-                                </ul>
-                              </div>
-                            )}
-                        </div>
-                      );
-                    }
-                  )}
+                <div className="summary-row">
+                  <span>Total devices:</span>
+                  <strong>{comparisonData.total_compared}</strong>
                 </div>
               </div>
-            ))}
+              <button
+                className="download-button-redesigned"
+                onClick={onDownloadExcel}
+              >
+                <Download size={16} />
+                Download Excel Report
+              </button>
+            </div>
+
+            {/* Filter Section */}
+            <div className="filter-commands-section">
+              <div className="filter-header">
+                <h3>Filters</h3>
+              </div>
+              <div className="filter-controls">
+                <div className="search-box-redesigned">
+                  <Search size={16} />
+                  <input
+                    type="text"
+                    placeholder="Search devices..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                <div className="filter-group">
+                  <label>Command:</label>
+                  <select
+                    value={selectedCommand}
+                    onChange={(e) => setSelectedCommand(e.target.value)}
+                    className="command-filter-select"
+                  >
+                    <option value="all">All Commands</option>
+                    {availableCommands.map((cmd) => (
+                      <option key={cmd} value={cmd}>
+                        {cmd.replace("_", " ").toUpperCase()}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Device List - Scrollable with wider view */}
+          <div className="device-comparison-list">
+            <div className="device-list-header">
+              <span className="device-column">Device</span>
+              <span className="status-column">Status</span>
+              <span className="changes-column">Changes Summary</span>
+            </div>
+            <div className="device-list-scrollable">
+              {filteredData.map((device, index) => (
+                <div key={index} className="device-comparison-row">
+                  <div className="device-info">
+                    <div className="device-ip">{device.ip_mgmt}</div>
+                    <div className="device-hostname">{device.hostname}</div>
+                    <div className="device-change-badges">
+                      {(() => {
+                        const changeSummary = getDeviceChangeSummary(
+                          device.command_results || {}
+                        );
+                        return (
+                          <>
+                            {changeSummary.added > 0 && (
+                              <span className="change-badge added">
+                                <span className="badge-icon">+</span>
+                                {changeSummary.added} Added
+                              </span>
+                            )}
+                            {changeSummary.removed > 0 && (
+                              <span className="change-badge removed">
+                                <span className="badge-icon">-</span>
+                                {changeSummary.removed} Removed
+                              </span>
+                            )}
+                            {changeSummary.modified > 0 && (
+                              <span className="change-badge modified">
+                                <span className="badge-icon">~</span>
+                                {changeSummary.modified} Changed
+                              </span>
+                            )}
+                            {changeSummary.total === 0 && (
+                              <span className="change-badge no-changes">
+                                <span className="badge-icon">✓</span>
+                                No Changes
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                  <div className="device-status">
+                    <span
+                      className={`status-indicator ${device.overall_status?.toLowerCase()}`}
+                    >
+                      {device.overall_status}
+                    </span>
+                  </div>
+                  <div className="device-changes">
+                    {Object.entries(device.command_results || {}).map(
+                      ([command, result]) => {
+                        if (
+                          selectedCommand !== "all" &&
+                          command !== selectedCommand
+                        ) {
+                          return null;
+                        }
+                        return (
+                          <div key={command} className="command-result-summary">
+                            <div className="command-name">
+                              {command.replace("_", " ").toUpperCase()}
+                            </div>
+                            <div className="change-stats">
+                              {(() => {
+                                // Helper function to format change items with detailed interface properties
+                                const formatChangeItem = (item, changeType, command) => {
+                                  if (typeof item === 'string') {
+                                    // Enhanced string processing for interface patterns
+                                    if (item.includes('Interface') && item.includes('Ethernet')) {
+                                      // Extract interface name and action from string like "Interface Ethernet3 added"
+                                      const match = item.match(/Interface\s+(Ethernet\d+)\s+(added|removed|modified|changed)/i);
+                                      if (match) {
+                                        const [, interfaceName, action] = match;
+                                        
+                                        // Determine interface property type based on command context
+                                        if (command && command.includes('show interfaces status')) {
+                                          return `Interface status ${interfaceName} ${action}`;
+                                        } else if (command && command.includes('show interfaces counters')) {
+                                          return `Interface counters ${interfaceName} ${action}`;
+                                        } else if (command && command.includes('show interfaces description')) {
+                                          return `Interface description ${interfaceName} ${action}`;
+                                        } else if (command && command.includes('status')) {
+                                          return `Interface status ${interfaceName} ${action}`;
+                                        } else if (command && command.includes('counter')) {
+                                          return `Interface counters ${interfaceName} ${action}`;
+                                        } else if (command && command.includes('description')) {
+                                          return `Interface description ${interfaceName} ${action}`;
+                                        } else {
+                                          return `Interface status ${interfaceName} ${action}`;
+                                        }
+                                      }
+                                    }
+                                    
+                                    return item;
+                                  } else if (typeof item === 'object' && item !== null) {
+                                    // Handle different object structures
+                                    if (item.description) {
+                                      return item.description;
+                                    } else if (item.interface) {
+                                      // Enhanced interface formatting with command context
+                                      const interfaceName = item.interface;
+                                      const action = changeType || item.action || item.change || 'changed';
+                                      
+                                      // Determine interface property type based on command or available data
+                                      if (command && command.includes('show interfaces status')) {
+                                        return `Interface status ${interfaceName} ${action}`;
+                                      } else if (command && command.includes('show interfaces counters')) {
+                                        return `Interface counters ${interfaceName} ${action}`;
+                                      } else if (command && command.includes('show interfaces description')) {
+                                        return `Interface description ${interfaceName} ${action}`;
+                                      } else if (item.linkStatus || item.lineProtocolStatus || item.interfaceType) {
+                                        return `Interface status ${interfaceName} ${action}`;
+                                      } else if (item.inOctets || item.outOctets || item.inUcastPkts) {
+                                        return `Interface counters ${interfaceName} ${action}`;
+                                      } else if (item.description && item.interfaceStatus) {
+                                        return `Interface description ${interfaceName} ${action}`;
+                                      } else {
+                                        return `Interface ${interfaceName} ${action}`;
+                                      }
+                                    } else if (item.name && (item.name.includes('Interface') || item.name.includes('Ethernet'))) {
+                                      // Enhanced handling of interface info in the name field
+                                      const action = changeType || item.action || item.change || 'changed';
+                                      
+                                      // Check if name already contains action
+                                      if (item.name.includes(action)) {
+                                        // Process existing string like "Interface Ethernet3 added"
+                                        const match = item.name.match(/Interface\s+(Ethernet\d+)\s+(added|removed|modified|changed)/i);
+                                        if (match) {
+                                          const [, interfaceName, detectedAction] = match;
+                                          
+                                          // Determine interface property type based on command context
+                                          if (command && command.includes('show interfaces status')) {
+                                            return `Interface status ${interfaceName} ${detectedAction}`;
+                                          } else if (command && command.includes('show interfaces counters')) {
+                                            return `Interface counters ${interfaceName} ${detectedAction}`;
+                                          } else if (command && command.includes('show interfaces description')) {
+                                            return `Interface description ${interfaceName} ${detectedAction}`;
+                                          } else if (command && command.includes('status')) {
+                                            return `Interface status ${interfaceName} ${detectedAction}`;
+                                          } else if (command && command.includes('counter')) {
+                                            return `Interface counters ${interfaceName} ${detectedAction}`;
+                                          } else if (command && command.includes('description')) {
+                                            return `Interface description ${interfaceName} ${detectedAction}`;
+                                          } else {
+                                            return `Interface status ${interfaceName} ${detectedAction}`;
+                                          }
+                                        }
+                                        return item.name;
+                                      } else {
+                                        // Extract interface name and apply action
+                                        const match = item.name.match(/Interface\s+(Ethernet\d+)/i);
+                                        if (match) {
+                                          const [, interfaceName] = match;
+                                          
+                                          if (command && command.includes('show interfaces status')) {
+                                            return `Interface status ${interfaceName} ${action}`;
+                                          } else if (command && command.includes('show interfaces counters')) {
+                                            return `Interface counters ${interfaceName} ${action}`;
+                                          } else if (command && command.includes('show interfaces description')) {
+                                            return `Interface description ${interfaceName} ${action}`;
+                                          } else {
+                                            return `Interface status ${interfaceName} ${action}`;
+                                          }
+                                        }
+                                        return `${item.name} ${action}`;
+                                      }
+                                    } else if (item.command && item.data) {
+                                      const dataStr = typeof item.data === 'object' 
+                                        ? JSON.stringify(item.data).replace(/[{}"]/g, '').replace(/,/g, ', ')
+                                        : item.data;
+                                      return `${item.command} - ${dataStr}`;
+                                    } else if (item.name) {
+                                      return item.name;
+                                    } else if (item.change || item.action) {
+                                      // Handle change/action objects
+                                      const action = item.change || item.action;
+                                      const target = item.target || item.interface || item.name || '';
+                                      if (target && target.includes('Ethernet')) {
+                                        // Enhanced interface formatting for target-based changes
+                                        if (command && command.includes('show interfaces status')) {
+                                          return `Interface status ${target} ${action}`;
+                                        } else if (command && command.includes('show interfaces counters')) {
+                                          return `Interface counters ${target} ${action}`;
+                                        } else if (command && command.includes('show interfaces description')) {
+                                          return `Interface description ${target} ${action}`;
+                                        } else {
+                                          return `Interface ${target} ${action}`;
+                                        }
+                                      }
+                                      return target ? `${target} ${action}` : action;
+                                    } else {
+                                      // Enhanced interface object detection with property-specific formatting
+                                      const keys = Object.keys(item);
+                                      const interfaceKey = keys.find(key => key.toLowerCase().includes('interface') || key.toLowerCase().includes('ethernet'));
+                                      
+                                      if (interfaceKey) {
+                                        const interfaceName = item[interfaceKey];
+                                        const action = changeType || 'changed';
+                                        
+                                        // Determine interface property type based on command context first, then properties
+                                        if (command && command.includes('show interfaces status')) {
+                                          return `Interface status ${interfaceName} ${action}`;
+                                        } else if (command && command.includes('show interfaces counters')) {
+                                          return `Interface counters ${interfaceName} ${action}`;
+                                        } else if (command && command.includes('show interfaces description')) {
+                                          return `Interface description ${interfaceName} ${action}`;
+                                        } else if (item.linkStatus || item.lineProtocolStatus || item.interfaceType || item.bandwidth) {
+                                          return `Interface status ${interfaceName} ${action}`;
+                                        } else if (item.inOctets || item.outOctets || item.inUcastPkts || item.outUcastPkts) {
+                                          return `Interface counters ${interfaceName} ${action}`;
+                                        } else if (item.description || item.interfaceStatus) {
+                                          return `Interface description ${interfaceName} ${action}`;
+                                        } else {
+                                          return `Interface ${interfaceName} ${action}`;
+                                        }
+                                      }
+                                      
+                                      // Check for direct Ethernet interface references in object keys
+                                      const ethernetKeys = keys.filter(key => key.includes('Ethernet'));
+                                      if (ethernetKeys.length > 0) {
+                                        const results = ethernetKeys.map(ethKey => {
+                                          const action = changeType || 'changed';
+                                          // Determine property type based on command context first, then object structure
+                                          if (command && command.includes('show interfaces status')) {
+                                            return `Interface status ${ethKey} ${action}`;
+                                          } else if (command && command.includes('show interfaces counters')) {
+                                            return `Interface counters ${ethKey} ${action}`;
+                                          } else if (command && command.includes('show interfaces description')) {
+                                            return `Interface description ${ethKey} ${action}`;
+                                          } else {
+                                            const value = item[ethKey];
+                                            if (typeof value === 'object' && value !== null) {
+                                              if (value.linkStatus || value.lineProtocolStatus || value.interfaceType) {
+                                                return `Interface status ${ethKey} ${action}`;
+                                              } else if (value.inOctets || value.outOctets || value.inUcastPkts) {
+                                                return `Interface counters ${ethKey} ${action}`;
+                                              } else if (value.description || value.interfaceStatus) {
+                                                return `Interface description ${ethKey} ${action}`;
+                                              } else {
+                                                return `Interface ${ethKey} ${action}`;
+                                              }
+                                            } else {
+                                              return `Interface ${ethKey} ${action}`;
+                                            }
+                                          }
+                                        });
+                                        return results.join(', ');
+                                      }
+                                      
+                                      // Improved fallback: create a readable string from object properties
+                                      if (keys.length > 0) {
+                                        return keys.map(key => {
+                                          const value = item[key];
+                                          if (typeof value === 'object' && value !== null) {
+                                            return `${key}: ${JSON.stringify(value).replace(/[{}"]/g, '').replace(/,/g, ', ')}`;
+                                          }
+                                          return `${key}: ${value}`;
+                                        }).join(', ');
+                                      }
+                                    }
+                                  }
+                                  // Final fallback
+                                  return String(item);
+                                };
+
+                                const ChangeDetailComponent = ({ changes, changeType, command }) => {
+                                  const [isExpanded, setIsExpanded] = React.useState(changes.length <= 3);
+                                  const displayChanges = isExpanded ? changes : changes.slice(0, 2);
+                                  const hasMore = changes.length > 3;
+                                  
+                                  return (
+                                    <>
+                                      {displayChanges.map((item, idx) => (
+                                        <div key={`${changeType}-${idx}`} className={`change-detail-row ${changeType}`}>
+                                          <span className="change-detail">{formatChangeItem(item, changeType, command)}</span>
+                                        </div>
+                                      ))}
+                                      {hasMore && (
+                                        <div className="change-expand-row">
+                                          <button 
+                                            className="change-expand-btn"
+                                            onClick={() => setIsExpanded(!isExpanded)}
+                                          >
+                                            {isExpanded 
+                                              ? `Show less` 
+                                              : `Show ${changes.length - 2} more ${changeType} changes`
+                                            }
+                                          </button>
+                                        </div>
+                                      )}
+                                    </>
+                                  );
+                                };
+
+                                const hasDetailedChanges = (result.added && result.added.length > 0) ||
+                                                          (result.removed && result.removed.length > 0) ||
+                                                          (result.modified && result.modified.length > 0);
+
+                                if (hasDetailedChanges) {
+                                  return (
+                                    <div className="change-detail-list">
+                                      {result.added && result.added.length > 0 && (
+                                        <ChangeDetailComponent 
+                                          changes={result.added} 
+                                          changeType="added" 
+                                          command={command}
+                                        />
+                                      )}
+                                      {result.removed && result.removed.length > 0 && (
+                                        <ChangeDetailComponent 
+                                          changes={result.removed} 
+                                          changeType="removed" 
+                                          command={command}
+                                        />
+                                      )}
+                                      {result.modified && result.modified.length > 0 && (
+                                        <ChangeDetailComponent 
+                                          changes={result.modified} 
+                                          changeType="modified" 
+                                          command={command}
+                                        />
+                                      )}
+                                    </div>
+                                  );
+                                } else if (result.statistics) {
+                                  return (
+                                    <div className="change-detail-list">
+                                      {result.statistics.added_count > 0 && (
+                                        <div className="change-detail-row added">
+                                          <span className="change-detail">Added: {result.statistics.added_count} items</span>
+                                        </div>
+                                      )}
+                                      {result.statistics.removed_count > 0 && (
+                                        <div className="change-detail-row removed">
+                                          <span className="change-detail">Removed: {result.statistics.removed_count} items</span>
+                                        </div>
+                                      )}
+                                      {result.statistics.modified_count > 0 && (
+                                        <div className="change-detail-row modified">
+                                          <span className="change-detail">Modified: {result.statistics.modified_count} items</span>
+                                        </div>
+                                      )}
+                                      {result.statistics.added_count === 0 && result.statistics.removed_count === 0 && result.statistics.modified_count === 0 && (
+                                        <div className="change-detail-row no-changes">
+                                          <span className="change-detail">No changes detected</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                } else if (result.status === "no_changes") {
+                                  return (
+                                    <div className="change-detail-list">
+                                      <div className="change-detail-row no-changes">
+                                        <span className="change-detail">No changes detected</span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
+                          </div>
+                        );
+                      }
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -988,6 +1310,21 @@ const OutputFilesModal = ({ isOpen, onClose, onCompareSelect }) => {
   const [loading, setLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+
+  React.useEffect(() => {
+    if (isOpen) {
+      document.documentElement.classList.add('modal-open');
+      document.body.classList.add('modal-open');
+    } else {
+      document.documentElement.classList.remove('modal-open');
+      document.body.classList.remove('modal-open');
+    }
+    
+    return () => {
+      document.documentElement.classList.remove('modal-open');
+      document.body.classList.remove('modal-open');
+    };
+  }, [isOpen]);
 
   const loadFiles = useCallback(async () => {
     setLoading(true);
@@ -1108,7 +1445,7 @@ const OutputFilesModal = ({ isOpen, onClose, onCompareSelect }) => {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
-        className="modal-content xl-modal"
+        className="modal-content xl-modal output-files-modal"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
@@ -1122,19 +1459,20 @@ const OutputFilesModal = ({ isOpen, onClose, onCompareSelect }) => {
         </div>
         <div className="modal-body">
           <div className="file-manager-controls">
-            <div className="controls-left">
-              <div className="search-box">
-                <Search size={16} />
-                <input
-                  type="text"
-                  placeholder="Search files..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+            <div className="controls-row">
+              <div className="controls-left">
+                <div className="search-box">
+                  <Search size={16} />
+                  <input
+                    type="text"
+                    placeholder="Search files..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
               </div>
-            </div>
 
-            <div className="controls-right">
+              <div className="controls-right">
               {selectedFiles.length > 0 && (
                 <>
                   <span className="selection-counter">
@@ -1170,6 +1508,7 @@ const OutputFilesModal = ({ isOpen, onClose, onCompareSelect }) => {
                 <RefreshCw size={16} />
                 Refresh
               </button>
+              </div>
             </div>
           </div>
 
@@ -1179,69 +1518,71 @@ const OutputFilesModal = ({ isOpen, onClose, onCompareSelect }) => {
               <p>Loading files...</p>
             </div>
           ) : (
-            <div className="files-grid">
-              {filteredFiles.length === 0 ? (
-                <div className="empty-state">
-                  <FolderOpen size={48} />
-                  <p>No output files found</p>
-                </div>
-              ) : (
-                filteredFiles.map((file) => (
-                  <div
-                    key={file.filename}
-                    className={`file-card ${
-                      selectedFiles.includes(file.filepath) ? "selected" : ""
-                    }`}
-                  >
-                    <div className="file-icon">
-                      <File size={32} />
-                    </div>
-                    <div className="file-info">
-                      <h4>{file.filename}</h4>
-                      <p>Size: {formatFileSize(file.size)}</p>
-                      <p>
-                        Modified: {new Date(file.modified).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="file-actions">
-                      <button
-                        className={`action-btn select ${
-                          selectedFiles.includes(file.filepath)
-                            ? "selected"
-                            : ""
-                        }`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFileSelection(file.filepath);
-                        }}
-                        title="Select for comparison"
-                      >
-                        <CheckCircle size={16} />
-                      </button>
-                      <button
-                        className="action-btn download"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDownload(file.filename);
-                        }}
-                        title="Download"
-                      >
-                        <Download size={16} />
-                      </button>
-                      <button
-                        className="action-btn delete"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(file.filename);
-                        }}
-                        title="Delete"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+            <div className="files-container">
+              <div className="files-grid">
+                {filteredFiles.length === 0 ? (
+                  <div className="empty-state">
+                    <FolderOpen size={48} />
+                    <p>No output files found</p>
                   </div>
-                ))
-              )}
+                ) : (
+                  filteredFiles.map((file) => (
+                    <div
+                      key={file.filename}
+                      className={`file-card ${
+                        selectedFiles.includes(file.filepath) ? "selected" : ""
+                      }`}
+                    >
+                      <div className="file-icon">
+                        <File size={32} />
+                      </div>
+                      <div className="file-info">
+                        <h4>{file.filename}</h4>
+                        <p>Size: {formatFileSize(file.size)}</p>
+                        <p>
+                          Modified: {new Date(file.modified).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="file-actions">
+                        <button
+                          className={`action-btn select ${
+                            selectedFiles.includes(file.filepath)
+                              ? "selected"
+                              : ""
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFileSelection(file.filepath);
+                          }}
+                          title="Select for comparison"
+                        >
+                          <CheckCircle size={16} />
+                        </button>
+                        <button
+                          className="action-btn download"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(file.filename);
+                          }}
+                          title="Download"
+                        >
+                          <Download size={16} />
+                        </button>
+                        <button
+                          className="action-btn delete"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(file.filename);
+                          }}
+                          title="Delete"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -1258,6 +1599,21 @@ const LogsViewer = ({ isOpen, onClose }) => {
   const [filterLevel, setFilterLevel] = useState("ALL");
   const [autoScroll, setAutoScroll] = useState(true);
   const logsEndRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      document.documentElement.classList.add('modal-open');
+      document.body.classList.add('modal-open');
+    } else {
+      document.documentElement.classList.remove('modal-open');
+      document.body.classList.remove('modal-open');
+    }
+    
+    return () => {
+      document.documentElement.classList.remove('modal-open');
+      document.body.classList.remove('modal-open');
+    };
+  }, [isOpen]);
 
   const loadLogs = useCallback(async () => {
     try {
@@ -1565,16 +1921,29 @@ function App() {
             name: file.name,
             deviceCount: result.device_count,
             warnings: result.warnings || [],
+            content: result.file_content, // Store file content instead of filepath
+            detectedVendors: result.detected_vendors || [],
           });
-          setUploadedFilePath(result.filepath);
+          setUploadedFilePath(result.file_content); // Use content instead of filepath
 
-          let message = result.message;
-          if (result.warnings && result.warnings.length > 0) {
-            message += ` (${result.warnings.length} warnings found)`;
+          // Create combined message with upload status and detected vendors
+          let message = `✅ File uploaded successfully!\nFound ${result.device_count} devices`;
+
+          if (result.detected_vendors && result.detected_vendors.length > 0) {
+            message += `\nDetected vendors: ${result.detected_vendors.join(", ")}`;
           }
 
-          showAlert(message, ALERT_TYPES.SUCCESS);
+          if (result.warnings && result.warnings.length > 0) {
+            message += `\n⚠️ ${result.warnings.length} warnings found`;
+            showAlert(message, ALERT_TYPES.WARNING);
+          } else {
+            showAlert(message, ALERT_TYPES.SUCCESS);
+          }
+
           setMessage(MESSAGES.API_READY);
+
+          // Update available commands based on detected vendors
+          await updateCommandsBasedOnFile(result.file_content);
         } else {
           let errorMessage = result.message || "File upload failed";
           if (result.errors && result.errors.length > 0) {
@@ -1686,8 +2055,7 @@ function App() {
           if (sysInfo && sysInfo.status === "success") {
             setSystemInfo(sysInfo.data);
             setApiEndpoints(sysInfo.data.api_endpoints || {});
-            console.log("System info loaded successfully:", sysInfo.data);
-            console.log("API endpoints:", sysInfo.data.api_endpoints);
+            console.log("API endpoints:", sysInfo);
           }
 
           if (cmdInfo && cmdInfo.status === "success") {
@@ -1696,8 +2064,6 @@ function App() {
             setAvailableCommands(dynamicCommands);
             // Don't select any commands by default
             setSelectedCommands([]);
-
-            console.log("Dynamic commands loaded:", dynamicCommands);
           }
         } catch (error) {
           console.error("Failed to connect to backend:", error);
@@ -1990,7 +2356,6 @@ function App() {
           body: JSON.stringify({
             first_file: files[0],
             second_file: files[1],
-            export_excel: true, // Always export Excel for comparison
           }),
         });
 
@@ -2025,6 +2390,115 @@ function App() {
     [handleCompareFiles]
   );
 
+  // Handler for downloading comparison Excel
+  const downloadComparisonExcel = useCallback(async () => {
+    if (!comparisonData) {
+      showAlert("No comparison data available to export", ALERT_TYPES.ERROR);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/export_comparison_excel`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          comparison_results: comparisonData.data || [],
+          first_file: comparisonData.first_file || "file1",
+          second_file: comparisonData.second_file || "file2",
+        }),
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.style.display = "none";
+        a.href = downloadUrl;
+        a.download = `comparison_${new Date()
+          .toISOString()
+          .slice(0, 19)
+          .replace(/[:-]/g, "")}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(downloadUrl);
+        document.body.removeChild(a);
+        showAlert(
+          "Comparison Excel file downloaded successfully",
+          ALERT_TYPES.SUCCESS
+        );
+      } else {
+        const errorData = await response.json();
+        showAlert(`Export error: ${errorData.message}`, ALERT_TYPES.ERROR);
+      }
+    } catch (error) {
+      console.error("Error downloading comparison Excel:", error);
+      showAlert(
+        `Error downloading Excel file: ${error.message}`,
+        ALERT_TYPES.ERROR
+      );
+    }
+  }, [comparisonData, showAlert]);
+
+  // Handler for updating commands based on uploaded file data
+  const updateCommandsBasedOnFile = useCallback(
+    async (fileContent) => {
+      if (!fileContent) return;
+
+      try {
+        // Parse CSV content to extract device data
+        const lines = fileContent.split("\n").filter((line) => line.trim());
+        if (lines.length < 2) return; // Need header + at least one data row
+
+        const headers = lines[0]
+          .split(",")
+          .map((h) => h.trim().replace(/"/g, ""));
+        const deviceData = [];
+
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i]
+            .split(",")
+            .map((v) => v.trim().replace(/"/g, ""));
+          if (values.length >= headers.length) {
+            const device = {};
+            headers.forEach((header, index) => {
+              device[header] = values[index] || "";
+            });
+            deviceData.push(device);
+          }
+        }
+
+        if (deviceData.length === 0) return;
+
+        // Get filtered commands based on detected vendors
+        const filteredResult = await api.getFilteredCommands(
+          deviceData,
+          "execution"
+        );
+
+        if (filteredResult && filteredResult.status === "success") {
+          setAvailableCommands(filteredResult.data);
+          setSelectedCommands([]); // Reset selected commands
+
+          // Don't show vendor detection alert here since it's already shown in upload success message
+        }
+      } catch (error) {
+        console.error("Error updating commands based on file data:", error);
+        // Fallback to loading all commands
+        try {
+          const cmdInfo = await api.getComparisonCommands();
+          if (cmdInfo && cmdInfo.status === "success") {
+            setAvailableCommands(cmdInfo.data);
+          }
+        } catch (fallbackError) {
+          console.error("Error loading fallback commands:", fallbackError);
+        }
+      }
+    },
+    [showAlert]
+  );
+
   // Handler for exporting data to Excel
   const handleExport = useCallback(async () => {
     if (!hasResults) return showAlert("No data to export.", ALERT_TYPES.INFO);
@@ -2055,6 +2529,7 @@ function App() {
       <ComparisonModal
         comparisonData={comparisonData}
         onClose={() => setComparisonData(null)}
+        onDownloadExcel={downloadComparisonExcel}
       />
       <OutputFilesModal
         isOpen={showFileManager}
@@ -2512,17 +2987,13 @@ function App() {
                             {comparisonData.available_commands?.join(", ") ||
                               "N/A"}
                           </p>
-                          {comparisonData.excel_file && (
-                            <button
-                              className="download-button small"
-                              onClick={() =>
-                                api.downloadFile(comparisonData.excel_file)
-                              }
-                            >
-                              <Download size={14} />
-                              Download Excel Report
-                            </button>
-                          )}
+                          <button
+                            className="download-button small"
+                            onClick={onDownloadExcel}
+                          >
+                            <Download size={14} />
+                            Download Excel Report
+                          </button>
                         </div>
                       </div>
 

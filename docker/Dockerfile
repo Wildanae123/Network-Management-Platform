@@ -46,7 +46,7 @@ RUN cd frontend && \
     ls -la dist/
 
 # Create necessary directories
-RUN mkdir -p uploads output logs && \
+RUN mkdir -p output && \
     echo "Created necessary directories"
 
 # Verify backend can import

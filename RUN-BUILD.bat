@@ -137,15 +137,10 @@ echo   Starting Production Network Management Platform...
 echo ================================================================
 echo.
 
-REM Create output and uploads directories if they don't exist
+REM Create output directories if they don't exist
 if not exist "output" (
     mkdir output
     echo Created output directory
-)
-
-if not exist "uploads" (
-    mkdir uploads
-    echo Created uploads directory
 )
 
 REM Check if commands.yaml exists, create if not

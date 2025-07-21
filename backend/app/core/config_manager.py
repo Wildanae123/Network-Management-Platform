@@ -310,12 +310,66 @@ class ConfigManager:
                     'device_type': device_type,
                     'category': category
                 }
+                
+                # For interfaces category, also add a base "interfaces" entry for comparison
+                if category == 'interfaces':
+                    comparison_commands['interfaces'] = {
+                        'name': 'Interfaces',
+                        'commands': commands if isinstance(commands, list) else [commands],
+                        'description': 'Compare all interface data between snapshots',
+                        'device_type': 'generic',
+                        'category': 'interfaces'
+                    }
         
         return comparison_commands
     
     def get_comparison_commands(self):
         """Get available comparison commands."""
         return self.comparison_commands
+    
+    def get_execution_commands(self):
+        """Get available execution commands in the same format as comparison commands."""
+        execution_commands = {}
+        
+        for device_type, categories in self.config_data.items():
+            if not isinstance(categories, dict):
+                continue
+                
+            for category, commands in categories.items():
+                # Create human-readable names and descriptions for execution
+                name_mapping = {
+                    'system_info': 'System Information',
+                    'interfaces': 'Interface Status & Counters',
+                    'routing': 'Routing Tables',
+                    'switching': 'Switching & VLANs',
+                    'protocols': 'Network Protocols',
+                    'monitoring': 'System Performance',
+                    'mlag': 'MLAG Status',
+                    'vpc': 'vPC Configuration',
+                    'security': 'Security & Access Control'
+                }
+                
+                description_mapping = {
+                    'system_info': 'Collect system version, hostname, and inventory information',
+                    'interfaces': 'Collect interface configurations, status, and counters',
+                    'routing': 'Collect routing tables and protocol information',
+                    'switching': 'Collect VLAN configurations and spanning tree status',
+                    'protocols': 'Collect network protocol neighbors and status',
+                    'monitoring': 'Collect system performance metrics',
+                    'mlag': 'Collect MLAG configuration and status',
+                    'vpc': 'Collect vPC configuration and status',
+                    'security': 'Collect security configurations and access lists'
+                }
+                
+                execution_commands[f"{device_type}_{category}"] = {
+                    'name': name_mapping.get(category, category.replace('_', ' ').title()),
+                    'commands': commands if isinstance(commands, list) else [commands],
+                    'description': description_mapping.get(category, f'Collect {category.replace("_", " ")} information'),
+                    'device_type': device_type,
+                    'category': category
+                }
+        
+        return execution_commands
     
     def get_commands_for_device(self, device_type: str):
         """Get commands for specific device type."""

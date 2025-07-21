@@ -415,7 +415,7 @@ select:disabled {
     transition: all 0.3s ease;
     backdrop-filter: blur(20px);
     max-height: 200px;
-    overflow-y: auto;
+    overflow: hidden; display: flex; flex-direction: column;
 }
 
 .custom-dropdown-menu.open {
@@ -835,7 +835,7 @@ select:focus,
     display: grid;
     gap: 1rem;
     max-height: 400px;
-    overflow-y: auto;
+    overflow: hidden; display: flex; flex-direction: column;
     padding: 1rem;
     border: 1px solid var(--border-color);
     border-radius: 10px;
@@ -1772,6 +1772,13 @@ select:focus,
     font-weight: 500;
 }
 
+.file-details .detected-vendors {
+    background: rgba(24, 144, 255, 0.1);
+    color: var(--info-color);
+    margin-top: 0.25rem;
+    border: 1px solid rgba(24, 144, 255, 0.2);
+}
+
 .remove-file-btn {
     background: none;
     border: none;
@@ -2072,6 +2079,13 @@ select:focus,
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
+}
+
+.filter-group select option {
+    background: var(--main-bg);
+    color: var(--text-color);
+    padding: 0.5rem;
+    border: none;
 }
 
 .filter-group select:focus,
@@ -2528,7 +2542,7 @@ select:focus,
 
 .devices-comparison {
     max-height: 400px;
-    overflow-y: auto;
+    overflow: hidden; display: flex; flex-direction: column;
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 1rem;
@@ -2616,31 +2630,92 @@ select:focus,
     color: var(--primary-color);
 }
 
+/* Files container wrapper */
+.files-container {
+    height: calc(100vh - 280px);
+    max-height: 70vh;
+    min-height: 400px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-color);
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    position: relative;
+}
+
+/* Scroll fade indicators */
+.files-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    background: linear-gradient(to bottom, var(--bg-color), transparent);
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.files-container::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    background: linear-gradient(to top, var(--bg-color), transparent);
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.files-container.scrollable::before,
+.files-container.scrollable::after {
+    opacity: 1;
+}
+
 .files-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 1rem;
-    max-height: 60vh;
-    overflow-y: auto;
+    height: 100%;
+    overflow: hidden; display: flex; flex-direction: column;
+    overflow-x: hidden;
     padding: 1rem;
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-color) transparent;
 }
 
 .files-grid::-webkit-scrollbar {
-    width: 8px;
+    width: 10px;
 }
 
 .files-grid::-webkit-scrollbar-track {
-    background: var(--secondary-bg);
-    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 5px;
+    margin: 5px 0;
 }
 
 .files-grid::-webkit-scrollbar-thumb {
-    background: linear-gradient(135deg, #4ecdc4, #45b7d1);
-    border-radius: 4px;
+    background: linear-gradient(135deg, var(--primary-color), #45b7d1);
+    border-radius: 5px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 .files-grid::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(135deg, #45b7d1, #4ecdc4);
+    background: linear-gradient(135deg, #45b7d1, var(--primary-color));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.files-grid::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(135deg, var(--primary-color), #3498db);
 }
 
 .file-card {
@@ -2824,7 +2899,7 @@ select:focus,
     border-radius: 8px;
     padding: 1rem;
     height: 60vh;
-    overflow-y: auto;
+    overflow: hidden; display: flex; flex-direction: column;
 }
 
 .logs-list {
@@ -3036,12 +3111,12 @@ select:focus,
 
 .modal-body {
     padding: 2rem 2.5rem;
-    overflow-y: auto;
+    overflow: hidden;
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 2rem;
-    background: var(--card-bg);
+    max-height: calc(100vh - 200px);
+    gap: 1rem;
 }
 
 .modal-close-btn:focus,
@@ -3063,6 +3138,9 @@ select:focus,
     border-radius: 12px;
     position: relative;
     overflow: hidden;
+    margin-bottom: 1.5rem;
+    z-index: 1;
+    flex-shrink: 0;
 }
 
 .file-manager-controls::before {
@@ -3411,7 +3489,7 @@ select:focus,
     gap: 1.5rem;
     padding: 1rem;
     max-height: 60vh;
-    overflow-y: auto;
+    overflow: hidden; display: flex; flex-direction: column;
 }
 
 .file-card {
@@ -3619,7 +3697,7 @@ select:focus,
 
 .comparison-results {
     max-height: 60vh;
-    overflow-y: auto;
+    overflow: hidden; display: flex; flex-direction: column;
     border: 1px solid var(--border-color);
     border-radius: 8px;
 }
@@ -3705,7 +3783,7 @@ select:focus,
     margin: 0;
     padding-left: 1rem;
     max-height: 200px;
-    overflow-y: auto;
+    overflow: hidden; display: flex; flex-direction: column;
 }
 
 .changes-list li {
@@ -3730,6 +3808,439 @@ select:focus,
     color: var(--text-muted);
     font-style: italic;
     font-family: inherit;
+}
+
+/* ===== Redesigned Comparison Modal ===== */
+.comparison-modal-redesigned {
+    width: 98vw;
+    max-width: 1600px;
+    max-height: 95vh;
+    min-height: 80vh;
+    overflow: hidden; display: flex; flex-direction: column;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+.comparison-modal-redesigned::-webkit-scrollbar {
+    width: 8px;
+}
+
+.comparison-modal-redesigned::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+}
+
+.comparison-modal-redesigned::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+.comparison-modal-redesigned::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color);
+}
+
+.comparison-summary-redesigned {
+    background: linear-gradient(135deg, var(--secondary-bg) 0%, rgba(248, 249, 250, 0.8) 100%);
+    padding: 1.5rem;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.summary-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.95rem;
+}
+
+.summary-row:last-child {
+    margin-bottom: 0;
+}
+
+.summary-row span {
+    color: var(--text-muted);
+    min-width: 100px;
+}
+
+.download-button-redesigned {
+    background: linear-gradient(135deg, var(--success-color), #73d13d);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(82, 196, 26, 0.2);
+}
+
+.download-button-redesigned:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(82, 196, 26, 0.3);
+}
+
+/* Filter Commands Section */
+.filter-commands-section {
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.filter-header {
+    margin-bottom: 1rem;
+}
+
+.filter-header h3 {
+    margin: 0;
+    color: var(--text-color);
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.filter-controls {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.search-box-redesigned {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--primary-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    flex: 1;
+    min-width: 200px;
+    transition: all 0.2s ease;
+}
+
+.search-box-redesigned:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+}
+
+.search-box-redesigned input {
+    border: none;
+    background: transparent;
+    outline: none;
+    flex: 1;
+    font-size: 0.9rem;
+    color: var(--text-color);
+}
+
+.command-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.command-filter label {
+    font-weight: 500;
+    color: var(--text-color);
+    font-size: 0.9rem;
+}
+
+.command-filter select {
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    color: var(--text-color);
+    min-width: 150px;
+    transition: all 0.2s ease;
+}
+
+.command-filter select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+    outline: none;
+}
+
+/* Device Comparison List */
+.device-comparison-list {
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.device-list-header {
+    background: linear-gradient(135deg, var(--primary-bg) 0%, rgba(240, 242, 245, 0.8) 100%);
+    padding: 1rem 1.5rem;
+    display: grid;
+    grid-template-columns: 1fr 0.8fr 5fr;
+    gap: 1rem;
+    font-weight: 600;
+    color: var(--text-color);
+    border-bottom: 2px solid var(--border-color);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Original device-list-scrollable - REPLACED with consolidated version below */
+
+/* Original device-comparison-row - REPLACED with consolidated version below */
+
+.device-change-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+}
+
+.change-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid;
+    transition: all 0.2s ease;
+}
+
+.change-badge.added {
+    background: rgba(34, 197, 94, 0.1);
+    color: #059669;
+    border-color: rgba(34, 197, 94, 0.3);
+}
+
+.change-badge.removed {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.change-badge.modified {
+    background: rgba(245, 158, 11, 0.1);
+    color: #d97706;
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.change-badge.no-changes {
+    background: rgba(107, 114, 128, 0.1);
+    color: #6b7280;
+    border-color: rgba(107, 114, 128, 0.3);
+}
+
+.badge-icon {
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.change-badge:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.device-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.device-ip {
+    font-weight: 600;
+    color: var(--text-color);
+    font-size: 0.95rem;
+}
+
+.device-hostname {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.device-status {
+    display: flex;
+    justify-content: center;
+}
+
+.status-indicator {
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: center;
+    min-width: 80px;
+}
+
+.status-indicator.changed {
+    background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.status-indicator.no_changes {
+    background: linear-gradient(135deg, #e2e3e5, #ddd);
+    color: #383d41;
+    border: 1px solid #ddd;
+}
+
+.device-changes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.command-result-summary {
+    background: var(--primary-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.75rem;
+    min-width: 120px;
+    transition: all 0.2s ease;
+}
+
+.command-result-summary:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+.command-name {
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: var(--text-color);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.change-stats {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* Excel-like Change Detail List Styles */
+.change-detail-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 200px;
+    max-width: 400px;
+}
+
+.change-detail-row {
+    display: flex;
+    align-items: center;
+    padding: 0.4rem 0.7rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-left: 3px solid;
+    background: rgba(255, 255, 255, 0.05);
+    transition: all 0.2s ease;
+    line-height: 1.3;
+}
+
+.change-detail-row:hover {
+    transform: translateX(2px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.change-detail-row.added {
+    border-left-color: #28a745;
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.1), rgba(40, 167, 69, 0.05));
+    color: #155724;
+}
+
+.change-detail-row.removed {
+    border-left-color: #dc3545;
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.1), rgba(220, 53, 69, 0.05));
+    color: #721c24;
+}
+
+.change-detail-row.modified {
+    border-left-color: #ffc107;
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.1), rgba(255, 193, 7, 0.05));
+    color: #856404;
+}
+
+.change-detail-row.no-changes {
+    border-left-color: #6c757d;
+    background: linear-gradient(135deg, rgba(108, 117, 125, 0.1), rgba(108, 117, 125, 0.05));
+    color: #495057;
+}
+
+.change-detail {
+    font-weight: 500;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    flex: 1;
+}
+
+.change-expand-row {
+    display: flex;
+    justify-content: center;
+    margin: 0.2rem 0;
+}
+
+.change-expand-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.65rem;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: capitalize;
+    opacity: 0.7;
+}
+
+.change-expand-btn:hover {
+    opacity: 1;
+    border-color: var(--primary-color);
+    background: rgba(24, 144, 255, 0.1);
+    transform: translateY(-1px);
+}
+
+/* Dark mode adjustments for change detail list */
+.dark .change-detail-row {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.dark .change-detail-row.added {
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.15), rgba(40, 167, 69, 0.08));
+    color: #98d982;
+}
+
+.dark .change-detail-row.removed {
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.15), rgba(220, 53, 69, 0.08));
+    color: #f5a6a6;
+}
+
+.dark .change-detail-row.modified {
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.15), rgba(255, 193, 7, 0.08));
+    color: #ffd866;
+}
+
+.dark .change-detail-row.no-changes {
+    background: linear-gradient(135deg, rgba(108, 117, 125, 0.15), rgba(108, 117, 125, 0.08));
+    color: #adb5bd;
 }
 
 /* API Endpoint Status Styles */
@@ -5036,6 +5547,12 @@ select:focus,
     color: #73d13d;
 }
 
+:root.dark .file-details .detected-vendors {
+    background: rgba(77, 171, 247, 0.15);
+    color: var(--info-color);
+    border-color: rgba(77, 171, 247, 0.3);
+}
+
 :root.dark .remove-file-btn::before {
     background: linear-gradient(135deg, #ff7875, #ff4d4f);
 }
@@ -5081,6 +5598,11 @@ select:focus,
 :root.dark .filter-group input:disabled {
     background: linear-gradient(135deg, #2d2d2d 0%, #1f1f1f 100%);
     color: #666666;
+}
+
+:root.dark .filter-group select option {
+    background: var(--main-bg);
+    color: var(--text-color);
 }
 
 :root.dark .search-group {
@@ -6467,6 +6989,12 @@ select:focus,
         padding: 0.4rem;
     }
 
+    .files-container {
+        height: calc(100vh - 300px);
+        max-height: 400px;
+        min-height: 250px;
+    }
+
     .files-grid {
         grid-template-columns: 1fr;
     }
@@ -6536,6 +7064,21 @@ select:focus,
     .devices-comparison {
         max-height: 300px;
         padding: 0.75rem;
+    }
+
+    .device-change-badges {
+        gap: 0.2rem;
+        margin-top: 0.4rem;
+    }
+
+    .change-badge {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.4rem;
+        gap: 0.2rem;
+    }
+
+    .badge-icon {
+        font-size: 0.7rem;
     }
 
     .results-summary .card-header {
@@ -6668,6 +7211,55 @@ select:focus,
         grid-template-columns: repeat(2, 1fr);
         gap: 1rem;
     }
+
+    /* Enhanced files-grid for tablets (768px-1199px) */
+    .files-container {
+        height: calc(100vh - 300px);
+        max-height: 65vh;
+        min-height: 350px;
+    }
+
+    .files-grid {
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 1rem;
+        padding: 1.25rem;
+    }
+
+    .files-grid::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    /* Tablet-specific enhancements */
+    .files-grid::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, var(--primary-color), #45b7d1);
+        border-radius: 4px;
+    }
+
+    .files-grid::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.08);
+        border-radius: 4px;
+    }
+}
+
+/* Specific optimization for 768px screens (common tablet size) */
+@media (min-width: 768px) and (max-width: 800px) {
+    .files-container {
+        height: calc(100vh - 280px);
+        max-height: 68vh;
+        min-height: 380px;
+    }
+
+    .files-grid {
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 1rem;
+        padding: 1rem;
+        scroll-behavior: smooth;
+    }
+
+    .modal-body {
+        padding: 1.5rem 2rem;
+        gap: 1rem;
+    }
 }
 
 /* Large screens (1200px+) */
@@ -6699,6 +7291,34 @@ select:focus,
     /* Ensure full width utilization for very large screens */
     .card {
         width: 100%;
+    }
+
+    /* Enhanced files-grid for larger screens */
+    .files-container {
+        height: calc(100vh - 250px);
+        max-height: 80vh;
+        min-height: 500px;
+    }
+
+    .files-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1.25rem;
+        padding: 1.5rem;
+    }
+}
+
+/* Ultra-large screens (4K and above) */
+@media (min-width: 1600px) {
+    .files-container {
+        height: calc(100vh - 220px);
+        max-height: 85vh;
+        min-height: 600px;
+    }
+
+    .files-grid {
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+        padding: 2rem;
     }
 
     .table-wrapper {
@@ -6896,7 +7516,7 @@ select:focus,
 
 .changes-list-enhanced {
     max-height: 200px;
-    overflow-y: auto;
+    overflow: hidden; display: flex; flex-direction: column;
     border: 1px solid var(--border-color);
     border-radius: 4px;
     padding: 0.5rem;
@@ -7390,7 +8010,7 @@ select:focus,
 
 .alerts-list {
     flex: 1;
-    overflow-y: auto;
+    overflow: hidden; display: flex; flex-direction: column;
     max-height: 300px;
 }
 
@@ -7568,7 +8188,7 @@ select:focus,
 
 .capacity-predictions {
     flex: 1;
-    overflow-y: auto;
+    overflow: hidden; display: flex; flex-direction: column;
 }
 
 .capacity-predictions h4 {
@@ -7858,3 +8478,1592 @@ select:focus,
 .loading-spinner {
     animation: spin 1s linear infinite;
 }
+
+/* Device Changes Column Scrolling */
+.device-changes {
+    max-height: 300px;
+    overflow: hidden; display: flex; flex-direction: column;
+    overflow-x: hidden;
+    padding-right: 0.5rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+.device-changes::-webkit-scrollbar {
+    width: 4px;
+}
+
+.device-changes::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.device-changes::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 2px;
+}
+
+.device-changes::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+
+/* Modal Background Scroll Prevention */
+body.modal-open {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+}
+
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1000;
+    overflow: hidden;
+}
+
+
+/* Fix for comparison modal body scrolling */
+.comparison-modal-redesigned .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    max-height: calc(95vh - 120px);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+.comparison-modal-redesigned .modal-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.comparison-modal-redesigned .modal-body::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 3px;
+}
+
+.comparison-modal-redesigned .modal-body::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.comparison-modal-redesigned .modal-body::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color);
+}
+
+
+/* Stronger modal background scroll prevention */
+body.modal-open {
+    overflow: hidden !important;
+    position: fixed !important;
+    width: 100% !important;
+    height: 100% !important;
+    top: 0 !important;
+    left: 0 !important;
+}
+
+body.modal-open * {
+    overscroll-behavior: none;
+}
+
+.modal-backdrop {
+    overscroll-behavior: none;
+    touch-action: none;
+}
+
+
+/* ===== REDESIGNED MODAL SYSTEM ===== */
+
+/* Stronger body lock for modals */
+html.modal-open,
+body.modal-open {
+    overflow: hidden !important;
+    position: fixed !important;
+    width: 100% !important;
+    height: 100% !important;
+    top: 0 !important;
+    left: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Reset modal backdrop */
+.modal-backdrop {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.5)) !important;
+    backdrop-filter: blur(5px) !important;
+    z-index: 9999 !important;
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
+    touch-action: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 1rem !important;
+    box-sizing: border-box !important;
+}
+
+/* Base modal content redesign */
+.modal-content {
+    position: relative !important;
+    background: var(--card-bg) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3) !important;
+    border: 1px solid var(--border-color) !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+}
+
+/* XL Modal specific sizing */
+.modal-content.xl-modal {
+    width: min(95vw, 1400px) !important;
+    height: min(90vh, 800px) !important;
+    min-height: 500px !important;
+}
+
+/* Modal header redesign */
+.modal-header {
+    padding: 1.5rem 2rem 1rem 2rem !important;
+    border-bottom: 1px solid var(--border-color) !important;
+    background: linear-gradient(135deg, var(--secondary-bg), var(--card-bg)) !important;
+    flex-shrink: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 10 !important;
+}
+
+/* Modal body redesign */
+.modal-body {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: 1.5rem 2rem !important;
+    position: relative !important;
+    scrollbar-width: thin !important;
+    scrollbar-color: var(--border-color) transparent !important;
+}
+
+.modal-body::-webkit-scrollbar {
+    width: 8px !important;
+}
+
+.modal-body::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05) !important;
+    border-radius: 4px !important;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+    background: var(--border-color) !important;
+    border-radius: 4px !important;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color) !important;
+}
+
+/* Modal close button redesign */
+.modal-close-btn {
+    position: absolute !important;
+    top: 1rem !important;
+    right: 1rem !important;
+    width: 32px !important;
+    height: 32px !important;
+    border: none !important;
+    background: rgba(0, 0, 0, 0.1) !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    font-size: 18px !important;
+    color: var(--text-color) !important;
+    transition: all 0.2s ease !important;
+    z-index: 20 !important;
+}
+
+.modal-close-btn:hover {
+    background: rgba(255, 0, 0, 0.1) !important;
+    color: #ff4444 !important;
+    transform: scale(1.1) !important;
+}
+
+/* Comparison Modal specific redesign */
+.comparison-modal-redesigned {
+    width: min(98vw, 1600px) !important;
+    height: min(95vh, 900px) !important;
+    min-height: 600px !important;
+}
+
+.comparison-modal-redesigned .modal-body {
+    padding: 1rem !important;
+}
+
+/* Output Files Modal specific redesign */
+.output-files-modal {
+    width: min(90vw, 1200px) !important;
+    height: min(85vh, 700px) !important;
+    min-height: 500px !important;
+}
+
+/* Device comparison list redesign */
+.device-comparison-list {
+    background: var(--secondary-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.device-list-header {
+    background: linear-gradient(135deg, var(--primary-color), rgba(24, 144, 255, 0.8)) !important;
+    color: white !important;
+    padding: 1rem 1.5rem !important;
+    font-weight: 600 !important;
+    font-size: 0.9rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    flex-shrink: 0 !important;
+    display: grid !important;
+    grid-template-columns: 1fr 0.8fr 5fr !important;
+    gap: 1rem !important;
+}
+
+/* First redesign device-list-scrollable - REPLACED with consolidated version below */
+
+/* First redesign device-comparison-row - REPLACED with consolidated version below */
+
+/* Responsive design for smaller screens */
+@media (max-width: 768px) {
+    .modal-backdrop {
+        padding: 0.5rem !important;
+    }
+
+    .modal-content.xl-modal {
+        width: 98vw !important;
+        height: 95vh !important;
+        min-height: 400px !important;
+    }
+
+    .modal-header {
+        padding: 1rem 1.5rem 0.75rem 1.5rem !important;
+    }
+
+    .modal-body {
+        padding: 1rem 1.5rem !important;
+    }
+
+    .device-comparison-row {
+        grid-template-columns: 1fr !important;
+        gap: 0.5rem !important;
+        padding: 1rem !important;
+    }
+
+    .device-list-header {
+        grid-template-columns: 1fr !important;
+        gap: 0.5rem !important;
+        padding: 0.75rem 1rem !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .modal-backdrop {
+        padding: 0.25rem !important;
+    }
+
+    .modal-content.xl-modal {
+        width: 99vw !important;
+        height: 98vh !important;
+        border-radius: 8px !important;
+    }
+
+    .modal-header h2 {
+        font-size: 1.2rem !important;
+    }
+
+    .modal-body {
+        padding: 0.75rem 1rem !important;
+    }
+}
+
+
+
+/* ===== OUTPUT FILES MODAL SPECIFIC STYLES ===== */
+
+.output-files-modal .modal-body {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1rem !important;
+    height: 100% !important;
+}
+
+.file-manager-controls {
+    flex-shrink: 0 !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 1rem !important;
+    padding: 1rem !important;
+    background: var(--secondary-bg) !important;
+    border-radius: 8px !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+.files-container {
+    flex: 1 !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.files-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
+    gap: 1rem !important;
+    padding: 1rem !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    flex: 1 !important;
+    scrollbar-width: thin !important;
+    scrollbar-color: var(--border-color) transparent !important;
+}
+
+.files-grid::-webkit-scrollbar {
+    width: 6px !important;
+}
+
+.files-grid::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05) !important;
+    border-radius: 3px !important;
+}
+
+.files-grid::-webkit-scrollbar-thumb {
+    background: var(--border-color) !important;
+    border-radius: 3px !important;
+}
+
+.files-grid::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color) !important;
+}
+
+.file-card {
+    background: var(--card-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    padding: 1rem !important;
+    transition: all 0.2s ease !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+    min-height: 120px !important;
+}
+
+.file-card:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+    border-color: var(--primary-color) !important;
+}
+
+.file-card.selected {
+    border-color: var(--primary-color) !important;
+    background: rgba(24, 144, 255, 0.05) !important;
+}
+
+/* ===== COMPARISON MODAL CONTENT LAYOUT ===== */
+
+.comparison-summary-redesigned {
+    flex-shrink: 0 !important;
+    background: linear-gradient(135deg, var(--secondary-bg) 0%, rgba(248, 249, 250, 0.8) 100%) !important;
+    padding: 1.5rem !important;
+    border-radius: 12px !important;
+    margin-bottom: 1.5rem !important;
+    border: 1px solid var(--border-color) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+}
+
+.filter-commands-section {
+    flex-shrink: 0 !important;
+    background: var(--card-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    padding: 1rem !important;
+    margin-bottom: 1rem !important;
+}
+
+.filter-commands-section .filter-controls {
+    display: flex !important;
+    gap: 1rem !important;
+    align-items: center !important;
+    flex-wrap: wrap !important;
+}
+
+.search-box-redesigned {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    background: var(--secondary-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 6px !important;
+    padding: 0.5rem !important;
+    min-width: 200px !important;
+}
+
+.search-box-redesigned input {
+    border: none !important;
+    background: transparent !important;
+    outline: none !important;
+    flex: 1 !important;
+    color: var(--text-color) !important;
+}
+
+/* Responsive adjustments for file manager */
+@media (max-width: 768px) {
+    .files-grid {
+        grid-template-columns: 1fr !important;
+        padding: 0.5rem !important;
+    }
+
+    .file-manager-controls {
+        flex-direction: column !important;
+        gap: 0.75rem !important;
+        align-items: stretch !important;
+    }
+
+    .controls-left,
+    .controls-right {
+        width: 100% !important;
+    }
+
+    .filter-commands-section .filter-controls {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+
+    .search-box-redesigned {
+        min-width: auto !important;
+        width: 100% !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .files-grid {
+        padding: 0.25rem !important;
+        gap: 0.5rem !important;
+    }
+
+    .file-card {
+        padding: 0.75rem !important;
+        min-height: 100px !important;
+    }
+
+    .comparison-summary-redesigned {
+        padding: 1rem !important;
+        margin-bottom: 1rem !important;
+    }
+}
+
+
+
+/* ===== REDESIGNED FILES GRID AND CARDS ===== */
+
+/* Remove the problematic grid layout and replace with flexbox */
+.files-container {
+    flex: 1 !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important; /* Important for flex child to shrink */
+}
+
+.files-grid {
+    /* Replace CSS Grid with Flexbox for better control */
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 1rem !important;
+    padding: 1rem !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    flex: 1 !important;
+    align-content: flex-start !important;
+    min-height: 0 !important;
+    scrollbar-width: thin !important;
+    scrollbar-color: var(--border-color) transparent !important;
+}
+
+.files-grid::-webkit-scrollbar {
+    width: 8px !important;
+}
+
+.files-grid::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05) !important;
+    border-radius: 4px !important;
+}
+
+.files-grid::-webkit-scrollbar-thumb {
+    background: var(--border-color) !important;
+    border-radius: 4px !important;
+}
+
+.files-grid::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color) !important;
+}
+
+/* Redesigned file cards with fixed dimensions */
+.file-card {
+    /* Fixed width approach for consistent layout */
+    width: 280px !important;
+    min-width: 280px !important;
+    max-width: 280px !important;
+    height: auto !important;
+    min-height: 140px !important;
+    max-height: 200px !important;
+    background: var(--card-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 12px !important;
+    padding: 1rem !important;
+    transition: all 0.2s ease !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
+    flex-shrink: 0 !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+
+.file-card:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
+    border-color: var(--primary-color) !important;
+    z-index: 2 !important;
+}
+
+.file-card.selected {
+    border-color: var(--primary-color) !important;
+    background: rgba(24, 144, 255, 0.08) !important;
+    box-shadow: 0 4px 16px rgba(24, 144, 255, 0.2) !important;
+}
+
+/* File card content layout */
+.file-icon {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-bottom: 0.75rem !important;
+    color: var(--primary-color) !important;
+    flex-shrink: 0 !important;
+}
+
+.file-info {
+    flex: 1 !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.25rem !important;
+    margin-bottom: 0.75rem !important;
+}
+
+.file-info h4 {
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    color: var(--text-color) !important;
+    margin: 0 !important;
+    line-height: 1.3 !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    hyphens: auto !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+}
+
+.file-info p {
+    font-size: 0.75rem !important;
+    color: var(--text-muted) !important;
+    margin: 0 !important;
+    line-height: 1.2 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+.file-actions {
+    display: flex !important;
+    gap: 0.5rem !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+    flex-shrink: 0 !important;
+    margin-top: auto !important;
+}
+
+.action-btn {
+    width: 32px !important;
+    height: 32px !important;
+    border: 1px solid var(--border-color) !important;
+    background: var(--secondary-bg) !important;
+    border-radius: 6px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    color: var(--text-color) !important;
+    flex-shrink: 0 !important;
+}
+
+.action-btn:hover {
+    background: var(--primary-color) !important;
+    color: white !important;
+    border-color: var(--primary-color) !important;
+    transform: scale(1.05) !important;
+}
+
+.action-btn.selected {
+    background: var(--primary-color) !important;
+    color: white !important;
+    border-color: var(--primary-color) !important;
+}
+
+.action-btn.delete:hover {
+    background: #ff4444 !important;
+    border-color: #ff4444 !important;
+    color: white !important;
+}
+
+/* Empty state styling */
+.empty-state {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 3rem !important;
+    color: var(--text-muted) !important;
+    min-height: 200px !important;
+}
+
+.empty-state svg {
+    margin-bottom: 1rem !important;
+    opacity: 0.5 !important;
+}
+
+/* Responsive breakpoints with specific card sizing */
+@media (max-width: 1400px) {
+    .file-card {
+        width: 260px !important;
+        min-width: 260px !important;
+        max-width: 260px !important;
+    }
+}
+
+@media (max-width: 1200px) {
+    .file-card {
+        width: 240px !important;
+        min-width: 240px !important;
+        max-width: 240px !important;
+    }
+}
+
+@media (max-width: 1000px) {
+    .files-grid {
+        justify-content: center !important;
+    }
+
+    .file-card {
+        width: 280px !important;
+        min-width: 280px !important;
+        max-width: 280px !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .files-grid {
+        padding: 0.75rem !important;
+        gap: 0.75rem !important;
+        justify-content: center !important;
+    }
+
+    .file-card {
+        width: calc(100% - 1rem) !important;
+        min-width: 280px !important;
+        max-width: 400px !important;
+        margin: 0 auto !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .files-grid {
+        padding: 0.5rem !important;
+        gap: 0.5rem !important;
+    }
+
+    .file-card {
+        width: calc(100% - 1rem) !important;
+        min-width: unset !important;
+        max-width: unset !important;
+        min-height: 120px !important;
+        padding: 0.75rem !important;
+    }
+
+    .file-info h4 {
+        font-size: 0.85rem !important;
+        -webkit-line-clamp: 1 !important;
+    }
+
+    .file-info p {
+        font-size: 0.7rem !important;
+    }
+
+    .action-btn {
+        width: 28px !important;
+        height: 28px !important;
+    }
+}
+
+@media (max-width: 320px) {
+    .files-grid {
+        padding: 0.25rem !important;
+    }
+
+    .file-card {
+        width: calc(100% - 0.5rem) !important;
+        padding: 0.5rem !important;
+        min-height: 100px !important;
+    }
+
+    .file-actions {
+        gap: 0.25rem !important;
+    }
+}
+
+/* Loading state for files grid */
+.loading-container {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 3rem !important;
+    min-height: 200px !important;
+    color: var(--text-muted) !important;
+}
+
+.loading-container svg {
+    margin-bottom: 1rem !important;
+    color: var(--primary-color) !important;
+}
+
+
+
+/* ===== REDESIGNED FILE MANAGER CONTROLS ===== */
+
+.file-manager-controls {
+    flex-shrink: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1rem !important;
+    padding: 1rem !important;
+    background: var(--secondary-bg) !important;
+    border-radius: 12px !important;
+    border: 1px solid var(--border-color) !important;
+    margin-bottom: 1rem !important;
+    box-sizing: border-box !important;
+}
+
+.controls-row {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 1rem !important;
+    flex-wrap: wrap !important;
+}
+
+.controls-left {
+    display: flex !important;
+    align-items: center !important;
+    gap: 1rem !important;
+    flex: 1 !important;
+    min-width: 200px !important;
+}
+
+.controls-right {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    flex-wrap: wrap !important;
+}
+
+.search-box {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    background: var(--card-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    padding: 0.5rem 0.75rem !important;
+    min-width: 200px !important;
+    max-width: 300px !important;
+    flex: 1 !important;
+}
+
+.search-box input {
+    border: none !important;
+    background: transparent !important;
+    outline: none !important;
+    flex: 1 !important;
+    color: var(--text-color) !important;
+    font-size: 0.9rem !important;
+}
+
+.search-box input::placeholder {
+    color: var(--text-muted) !important;
+}
+
+.selection-counter {
+    font-size: 0.85rem !important;
+    color: var(--primary-color) !important;
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+}
+
+.delete-selected-button,
+.compare-button,
+.refresh-button {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    padding: 0.5rem 1rem !important;
+    border: 1px solid var(--border-color) !important;
+    background: var(--card-bg) !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    font-size: 0.85rem !important;
+    color: var(--text-color) !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+}
+
+.delete-selected-button:hover {
+    background: #ff4444 !important;
+    border-color: #ff4444 !important;
+    color: white !important;
+}
+
+.compare-button:hover {
+    background: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    color: white !important;
+}
+
+.refresh-button:hover {
+    background: #28a745 !important;
+    border-color: #28a745 !important;
+    color: white !important;
+}
+
+/* Responsive controls */
+@media (max-width: 1024px) {
+    .controls-row {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+
+    .controls-left,
+    .controls-right {
+        width: 100% !important;
+        justify-content: space-between !important;
+    }
+
+    .search-box {
+        min-width: unset !important;
+        max-width: unset !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .file-manager-controls {
+        padding: 0.75rem !important;
+        gap: 0.75rem !important;
+    }
+
+    .controls-left {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.5rem !important;
+    }
+
+    .controls-right {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.5rem !important;
+    }
+
+    .search-box {
+        width: 100% !important;
+    }
+
+    .delete-selected-button,
+    .compare-button,
+    .refresh-button {
+        width: 100% !important;
+        justify-content: center !important;
+        padding: 0.75rem !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .file-manager-controls {
+        padding: 0.5rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+
+    .search-box {
+        padding: 0.75rem !important;
+    }
+
+    .search-box input {
+        font-size: 1rem !important; /* Prevent zoom on iOS */
+    }
+}
+
+
+/* ===== REDESIGNED FILE COMPARISON RESULTS MODAL ===== */
+
+/* Modal specific sizing - larger for comparison */
+.comparison-modal-redesigned {
+    width: min(98vw, 1800px) !important;
+    height: min(95vh, 1000px) !important;
+    min-height: 700px !important;
+}
+
+.comparison-modal-redesigned .modal-body {
+    padding: 1rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1rem !important;
+    height: 100% !important;
+    overflow: hidden !important;
+}
+
+/* Top section with summary and filters in one row */
+.comparison-top-section {
+    display: flex !important;
+    gap: 1rem !important;
+    flex-shrink: 0 !important;
+    align-items: stretch !important;
+}
+
+.comparison-summary-redesigned {
+    flex: 2 !important;
+    background: linear-gradient(135deg, var(--secondary-bg) 0%, rgba(248, 249, 250, 0.8) 100%) !important;
+    padding: 1.25rem !important;
+    border-radius: 12px !important;
+    border: 1px solid var(--border-color) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+    margin-bottom: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    min-height: 120px !important;
+}
+
+.filter-commands-section {
+    flex: 1 !important;
+    background: var(--card-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 12px !important;
+    padding: 1.25rem !important;
+    margin-bottom: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    min-height: 120px !important;
+}
+
+/* Device comparison list - maximized height */
+.device-comparison-list {
+    flex: 1 !important;
+    background: var(--secondary-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+}
+
+/* Second redesign device-list-scrollable - REPLACED with consolidated version below */
+
+/* Additional styles for comparison modal components */
+.search-box-redesigned {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    background: var(--secondary-bg) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    padding: 0.5rem 0.75rem !important;
+    transition: all 0.2s ease !important;
+}
+
+.search-box-redesigned:focus-within {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.1) !important;
+}
+
+.search-box-redesigned input {
+    border: none !important;
+    background: transparent !important;
+    outline: none !important;
+    flex: 1 !important;
+    color: var(--text-color) !important;
+    font-size: 0.9rem !important;
+}
+
+.filter-group {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+}
+
+.filter-group label {
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+    color: var(--text-color) !important;
+}
+
+.command-filter-select {
+    padding: 0.5rem !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 6px !important;
+    background: var(--secondary-bg) !important;
+    color: var(--text-color) !important;
+    font-size: 0.9rem !important;
+    outline: none !important;
+    transition: all 0.2s ease !important;
+}
+
+.command-filter-select:focus {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.1) !important;
+}
+
+.summary-row {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    margin-bottom: 0.5rem !important;
+    font-size: 0.9rem !important;
+}
+
+.summary-row:last-child {
+    margin-bottom: 0 !important;
+}
+
+.summary-row span {
+    color: var(--text-muted) !important;
+}
+
+.summary-row strong {
+    color: var(--text-color) !important;
+    font-weight: 600 !important;
+}
+
+.download-button-redesigned {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    padding: 0.5rem 1rem !important;
+    background: var(--primary-color) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 6px !important;
+    font-size: 0.85rem !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    margin-top: 0.75rem !important;
+    align-self: flex-start !important;
+}
+
+.download-button-redesigned:hover {
+    background: rgba(24, 144, 255, 0.9) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(24, 144, 255, 0.3) !important;
+}
+
+/* Responsive design for comparison modal */
+@media (max-width: 1024px) {
+    .comparison-top-section {
+        flex-direction: column !important;
+        gap: 1rem !important;
+    }
+
+    .comparison-summary-redesigned,
+    .filter-commands-section {
+        flex: 1 !important;
+        min-height: auto !important;
+    }
+
+    .filter-commands-section .filter-controls {
+        flex-direction: row !important;
+        gap: 1rem !important;
+        align-items: flex-end !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .comparison-modal-redesigned {
+        width: 98vw !important;
+        height: 95vh !important;
+        min-height: 600px !important;
+    }
+
+    .comparison-modal-redesigned .modal-body {
+        padding: 0.75rem !important;
+    }
+
+    .comparison-summary-redesigned,
+    .filter-commands-section {
+        padding: 1rem !important;
+    }
+
+    .filter-commands-section .filter-controls {
+        flex-direction: column !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .comparison-modal-redesigned .modal-body {
+        padding: 0.5rem !important;
+        gap: 0.75rem !important;
+    }
+
+    .comparison-summary-redesigned,
+    .filter-commands-section {
+        padding: 0.75rem !important;
+    }
+
+    .summary-row {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.25rem !important;
+    }
+}
+
+
+/* Simple device-comparison-row layout fix */
+.device-comparison-row {
+    width: 100% !important;
+    height: auto !important;
+}
+
+
+
+
+
+
+
+/* =================================
+   CONSOLIDATED DEVICE COMPARISON LIST STYLES
+   ================================= */
+
+/* Main container with horizontal scrolling capability */
+.device-comparison-list {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Header with fixed position */
+.device-list-header {
+    display: grid;
+    grid-template-columns: 250px 150px 1fr;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    background: var(--secondary-bg);
+    border-bottom: 2px solid var(--border-color);
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    min-width: 800px;
+}
+
+/* Scrollable content area with both horizontal and vertical scrolling */
+.device-list-scrollable {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+/* Custom scrollbar styling for webkit browsers */
+.device-list-scrollable::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+.device-list-scrollable::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 6px;
+}
+
+.device-list-scrollable::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 6px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+
+.device-list-scrollable::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color);
+    background-clip: content-box;
+}
+
+.device-list-scrollable::-webkit-scrollbar-corner {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+/* Device comparison rows */
+.device-comparison-row {
+    display: grid;
+    grid-template-columns: 250px 150px 1fr;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+    align-items: flex-start;
+    min-width: 800px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.device-comparison-row:hover {
+    background: var(--primary-bg);
+    transform: translateX(2px);
+}
+
+.device-comparison-row:last-child {
+    border-bottom: none;
+}
+
+/* Device info column */
+.device-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
+    word-wrap: break-word;
+}
+
+/* Device status column */
+.device-status {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-width: 0;
+}
+
+/* Device changes column with proper overflow handling */
+.device-changes {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+/* Command result summaries */
+.command-result-summary {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-height: 300px;
+    min-height: 120px;
+    margin-bottom: 0.75rem;
+    border-radius: 6px;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.command-result-summary:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
+}
+
+/* Change detail lists */
+.change-detail-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.75rem;
+    margin: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+.change-detail-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.change-detail-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
+.change-detail-list::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+.change-detail-list::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color);
+}
+
+.change-detail-row {
+    padding: 0.4rem 0.6rem;
+    margin-bottom: 0.3rem;
+    border-radius: 4px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    border-left: 3px solid transparent;
+    background: rgba(0, 0, 0, 0.02);
+    transition: all 0.15s ease;
+}
+
+.change-detail-row:hover {
+    background: rgba(24, 144, 255, 0.05);
+    border-left-color: var(--primary-color);
+}
+
+.change-detail-row.added {
+    border-left-color: #28a745;
+    background: rgba(40, 167, 69, 0.05);
+}
+
+.change-detail-row.removed {
+    border-left-color: #dc3545;
+    background: rgba(220, 53, 69, 0.05);
+}
+
+.change-detail-row.modified {
+    border-left-color: #ffc107;
+    background: rgba(255, 193, 7, 0.05);
+}
+
+.change-detail-row.no-changes {
+    border-left-color: #6c757d;
+    background: rgba(108, 117, 125, 0.05);
+    font-style: italic;
+}
+
+/* Responsive design for mobile devices */
+@media (max-width: 768px) {
+    .device-list-header,
+    .device-comparison-row {
+        grid-template-columns: 1fr;
+        min-width: auto;
+    }
+    
+    .device-list-header {
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+    }
+    
+    .device-comparison-row {
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+    }
+    
+    .device-changes {
+        margin-top: 0.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .device-list-header {
+        padding: 0.5rem;
+        font-size: 0.8rem;
+    }
+    
+    .device-comparison-row {
+        padding: 0.5rem;
+    }
+    
+    .command-result-summary {
+        padding: 0.5rem;
+        font-size: 0.85rem;
+    }
+}
+
+.command-result-summary:last-child {
+    margin-bottom: 0 !important;
+}
+
+.command-result-summary .command-name {
+    font-weight: 600;
+    color: var(--text-color);
+    padding: 0.75rem 0.75rem 0.5rem 0.75rem;
+    background: rgba(0, 0, 0, 0.02);
+    border-bottom: 1px solid var(--border-color);
+    margin: 0;
+    flex-shrink: 0;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Additional change detail styling */
+.change-stats {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Handle cases where change-stats contains direct content */
+.change-stats:not(:has(.change-detail-list)) {
+    padding: 0.75rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+.change-stats:not(:has(.change-detail-list))::-webkit-scrollbar {
+    width: 8px;
+}
+
+.change-stats:not(:has(.change-detail-list))::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
+.change-stats:not(:has(.change-detail-list))::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+.change-stats:not(:has(.change-detail-list))::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color);
+}
+
+/* Expand/collapse button styling */
+.change-expand-btn {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    margin-top: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.change-expand-btn:hover {
+    background: var(--primary-hover, #1565c0);
+    transform: translateY(-1px);
+}
+
+.change-expand-row {
+    display: flex;
+    justify-content: center;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-color);
+    margin-top: 0.5rem;
+}
+
+/* Make device info and status align properly with dynamic height */
+.device-info,
+.device-status {
+    align-self: flex-start !important;
+    height: auto !important;
+}
+
+.device-status {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
+    padding-top: 0.5rem !important;
+}
+
+
+
+/* Enhanced compatibility for change-stats scrolling */
+.command-result-summary .change-stats {
+    padding: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+.command-result-summary .change-stats::-webkit-scrollbar {
+    width: 8px;
+}
+
+.command-result-summary .change-stats::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
+.command-result-summary .change-stats::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+.command-result-summary .change-stats::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color);
+}
+
+/* Override padding for change-detail-list inside change-stats */
+.command-result-summary .change-stats .change-detail-list {
+    padding: 0.75rem;
+    margin: 0;
+}
+
+/* Fix for when change-stats contains direct text content */
+.command-result-summary .change-stats:not(:empty):not(.has-list) {
+    padding: 0.75rem;
+}
+
