@@ -610,16 +610,16 @@ const LoadingOverlay = ({ message, isVisible, apiStatus, progress }) => {
 const Alert = ({ info, onClose }) => {
   React.useEffect(() => {
     if (info) {
-      document.documentElement.classList.add('modal-open');
-      document.body.classList.add('modal-open');
+      document.documentElement.classList.add("modal-open");
+      document.body.classList.add("modal-open");
     } else {
-      document.documentElement.classList.remove('modal-open');
-      document.body.classList.remove('modal-open');
+      document.documentElement.classList.remove("modal-open");
+      document.body.classList.remove("modal-open");
     }
-    
+
     return () => {
-      document.documentElement.classList.remove('modal-open');
-      document.body.classList.remove('modal-open');
+      document.documentElement.classList.remove("modal-open");
+      document.body.classList.remove("modal-open");
     };
   }, [info]);
 
@@ -646,7 +646,9 @@ const Alert = ({ info, onClose }) => {
             <X size={24} />
           </button>
         </div>
-        <p className="alert-message" style={{ whiteSpace: 'pre-line' }}>{info.message}</p>
+        <p className="alert-message" style={{ whiteSpace: "pre-line" }}>
+          {info.message}
+        </p>
         <button className="alert-ok-button" onClick={onClose}>
           OK
         </button>
@@ -659,16 +661,16 @@ const Alert = ({ info, onClose }) => {
 const DetailModal = ({ data, onClose, title = "Device Command Output" }) => {
   React.useEffect(() => {
     if (data) {
-      document.documentElement.classList.add('modal-open');
-      document.body.classList.add('modal-open');
+      document.documentElement.classList.add("modal-open");
+      document.body.classList.add("modal-open");
     } else {
-      document.documentElement.classList.remove('modal-open');
-      document.body.classList.remove('modal-open');
+      document.documentElement.classList.remove("modal-open");
+      document.body.classList.remove("modal-open");
     }
-    
+
     return () => {
-      document.documentElement.classList.remove('modal-open');
-      document.body.classList.remove('modal-open');
+      document.documentElement.classList.remove("modal-open");
+      document.body.classList.remove("modal-open");
     };
   }, [data]);
 
@@ -744,16 +746,16 @@ const ComparisonModal = ({ comparisonData, onClose, onDownloadExcel }) => {
 
   React.useEffect(() => {
     if (comparisonData) {
-      document.documentElement.classList.add('modal-open');
-      document.body.classList.add('modal-open');
+      document.documentElement.classList.add("modal-open");
+      document.body.classList.add("modal-open");
     } else {
-      document.documentElement.classList.remove('modal-open');
-      document.body.classList.remove('modal-open');
+      document.documentElement.classList.remove("modal-open");
+      document.body.classList.remove("modal-open");
     }
-    
+
     return () => {
-      document.documentElement.classList.remove('modal-open');
-      document.body.classList.remove('modal-open');
+      document.documentElement.classList.remove("modal-open");
+      document.body.classList.remove("modal-open");
     };
   }, [comparisonData]);
 
@@ -816,18 +818,8 @@ const ComparisonModal = ({ comparisonData, onClose, onDownloadExcel }) => {
               <div className="filter-header">
                 <h3>Filters</h3>
               </div>
-              <div className="filter-controls">
-                <div className="search-box-redesigned">
-                  <Search size={16} />
-                  <input
-                    type="text"
-                    placeholder="Search devices..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-                <div className="filter-group">
-                  <label>Command:</label>
+              <div className="filter-group">
+                <div className="filter-controls">
                   <select
                     value={selectedCommand}
                     onChange={(e) => setSelectedCommand(e.target.value)}
@@ -840,6 +832,15 @@ const ComparisonModal = ({ comparisonData, onClose, onDownloadExcel }) => {
                       </option>
                     ))}
                   </select>
+                </div>
+                <div className="search-box-redesigned">
+                  <Search size={16} />
+                  <input
+                    type="text"
+                    placeholder="Search devices..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
                 </div>
               </div>
             </div>
@@ -918,83 +919,187 @@ const ComparisonModal = ({ comparisonData, onClose, onDownloadExcel }) => {
                             <div className="change-stats">
                               {(() => {
                                 // Helper function to format change items with detailed interface properties
-                                const formatChangeItem = (item, changeType, command) => {
-                                  if (typeof item === 'string') {
+                                const formatChangeItem = (
+                                  item,
+                                  changeType,
+                                  command
+                                ) => {
+                                  if (typeof item === "string") {
                                     // Enhanced string processing for interface patterns
-                                    if (item.includes('Interface') && item.includes('Ethernet')) {
+                                    if (
+                                      item.includes("Interface") &&
+                                      item.includes("Ethernet")
+                                    ) {
                                       // Extract interface name and action from string like "Interface Ethernet3 added"
-                                      const match = item.match(/Interface\s+(Ethernet\d+)\s+(added|removed|modified|changed)/i);
+                                      const match = item.match(
+                                        /Interface\s+(Ethernet\d+)\s+(added|removed|modified|changed)/i
+                                      );
                                       if (match) {
                                         const [, interfaceName, action] = match;
-                                        
+
                                         // Determine interface property type based on command context
-                                        if (command && command.includes('show interfaces status')) {
+                                        if (
+                                          command &&
+                                          command.includes(
+                                            "show interfaces status"
+                                          )
+                                        ) {
                                           return `Interface status ${interfaceName} ${action}`;
-                                        } else if (command && command.includes('show interfaces counters')) {
+                                        } else if (
+                                          command &&
+                                          command.includes(
+                                            "show interfaces counters"
+                                          )
+                                        ) {
                                           return `Interface counters ${interfaceName} ${action}`;
-                                        } else if (command && command.includes('show interfaces description')) {
+                                        } else if (
+                                          command &&
+                                          command.includes(
+                                            "show interfaces description"
+                                          )
+                                        ) {
                                           return `Interface description ${interfaceName} ${action}`;
-                                        } else if (command && command.includes('status')) {
+                                        } else if (
+                                          command &&
+                                          command.includes("status")
+                                        ) {
                                           return `Interface status ${interfaceName} ${action}`;
-                                        } else if (command && command.includes('counter')) {
+                                        } else if (
+                                          command &&
+                                          command.includes("counter")
+                                        ) {
                                           return `Interface counters ${interfaceName} ${action}`;
-                                        } else if (command && command.includes('description')) {
+                                        } else if (
+                                          command &&
+                                          command.includes("description")
+                                        ) {
                                           return `Interface description ${interfaceName} ${action}`;
                                         } else {
                                           return `Interface status ${interfaceName} ${action}`;
                                         }
                                       }
                                     }
-                                    
+
                                     return item;
-                                  } else if (typeof item === 'object' && item !== null) {
+                                  } else if (
+                                    typeof item === "object" &&
+                                    item !== null
+                                  ) {
                                     // Handle different object structures
                                     if (item.description) {
                                       return item.description;
                                     } else if (item.interface) {
                                       // Enhanced interface formatting with command context
                                       const interfaceName = item.interface;
-                                      const action = changeType || item.action || item.change || 'changed';
-                                      
+                                      const action =
+                                        changeType ||
+                                        item.action ||
+                                        item.change ||
+                                        "changed";
+
                                       // Determine interface property type based on command or available data
-                                      if (command && command.includes('show interfaces status')) {
+                                      if (
+                                        command &&
+                                        command.includes(
+                                          "show interfaces status"
+                                        )
+                                      ) {
                                         return `Interface status ${interfaceName} ${action}`;
-                                      } else if (command && command.includes('show interfaces counters')) {
+                                      } else if (
+                                        command &&
+                                        command.includes(
+                                          "show interfaces counters"
+                                        )
+                                      ) {
                                         return `Interface counters ${interfaceName} ${action}`;
-                                      } else if (command && command.includes('show interfaces description')) {
+                                      } else if (
+                                        command &&
+                                        command.includes(
+                                          "show interfaces description"
+                                        )
+                                      ) {
                                         return `Interface description ${interfaceName} ${action}`;
-                                      } else if (item.linkStatus || item.lineProtocolStatus || item.interfaceType) {
+                                      } else if (
+                                        item.linkStatus ||
+                                        item.lineProtocolStatus ||
+                                        item.interfaceType
+                                      ) {
                                         return `Interface status ${interfaceName} ${action}`;
-                                      } else if (item.inOctets || item.outOctets || item.inUcastPkts) {
+                                      } else if (
+                                        item.inOctets ||
+                                        item.outOctets ||
+                                        item.inUcastPkts
+                                      ) {
                                         return `Interface counters ${interfaceName} ${action}`;
-                                      } else if (item.description && item.interfaceStatus) {
+                                      } else if (
+                                        item.description &&
+                                        item.interfaceStatus
+                                      ) {
                                         return `Interface description ${interfaceName} ${action}`;
                                       } else {
                                         return `Interface ${interfaceName} ${action}`;
                                       }
-                                    } else if (item.name && (item.name.includes('Interface') || item.name.includes('Ethernet'))) {
+                                    } else if (
+                                      item.name &&
+                                      (item.name.includes("Interface") ||
+                                        item.name.includes("Ethernet"))
+                                    ) {
                                       // Enhanced handling of interface info in the name field
-                                      const action = changeType || item.action || item.change || 'changed';
-                                      
+                                      const action =
+                                        changeType ||
+                                        item.action ||
+                                        item.change ||
+                                        "changed";
+
                                       // Check if name already contains action
                                       if (item.name.includes(action)) {
                                         // Process existing string like "Interface Ethernet3 added"
-                                        const match = item.name.match(/Interface\s+(Ethernet\d+)\s+(added|removed|modified|changed)/i);
+                                        const match = item.name.match(
+                                          /Interface\s+(Ethernet\d+)\s+(added|removed|modified|changed)/i
+                                        );
                                         if (match) {
-                                          const [, interfaceName, detectedAction] = match;
-                                          
+                                          const [
+                                            ,
+                                            interfaceName,
+                                            detectedAction,
+                                          ] = match;
+
                                           // Determine interface property type based on command context
-                                          if (command && command.includes('show interfaces status')) {
+                                          if (
+                                            command &&
+                                            command.includes(
+                                              "show interfaces status"
+                                            )
+                                          ) {
                                             return `Interface status ${interfaceName} ${detectedAction}`;
-                                          } else if (command && command.includes('show interfaces counters')) {
+                                          } else if (
+                                            command &&
+                                            command.includes(
+                                              "show interfaces counters"
+                                            )
+                                          ) {
                                             return `Interface counters ${interfaceName} ${detectedAction}`;
-                                          } else if (command && command.includes('show interfaces description')) {
+                                          } else if (
+                                            command &&
+                                            command.includes(
+                                              "show interfaces description"
+                                            )
+                                          ) {
                                             return `Interface description ${interfaceName} ${detectedAction}`;
-                                          } else if (command && command.includes('status')) {
+                                          } else if (
+                                            command &&
+                                            command.includes("status")
+                                          ) {
                                             return `Interface status ${interfaceName} ${detectedAction}`;
-                                          } else if (command && command.includes('counter')) {
+                                          } else if (
+                                            command &&
+                                            command.includes("counter")
+                                          ) {
                                             return `Interface counters ${interfaceName} ${detectedAction}`;
-                                          } else if (command && command.includes('description')) {
+                                          } else if (
+                                            command &&
+                                            command.includes("description")
+                                          ) {
                                             return `Interface description ${interfaceName} ${detectedAction}`;
                                           } else {
                                             return `Interface status ${interfaceName} ${detectedAction}`;
@@ -1003,15 +1108,32 @@ const ComparisonModal = ({ comparisonData, onClose, onDownloadExcel }) => {
                                         return item.name;
                                       } else {
                                         // Extract interface name and apply action
-                                        const match = item.name.match(/Interface\s+(Ethernet\d+)/i);
+                                        const match = item.name.match(
+                                          /Interface\s+(Ethernet\d+)/i
+                                        );
                                         if (match) {
                                           const [, interfaceName] = match;
-                                          
-                                          if (command && command.includes('show interfaces status')) {
+
+                                          if (
+                                            command &&
+                                            command.includes(
+                                              "show interfaces status"
+                                            )
+                                          ) {
                                             return `Interface status ${interfaceName} ${action}`;
-                                          } else if (command && command.includes('show interfaces counters')) {
+                                          } else if (
+                                            command &&
+                                            command.includes(
+                                              "show interfaces counters"
+                                            )
+                                          ) {
                                             return `Interface counters ${interfaceName} ${action}`;
-                                          } else if (command && command.includes('show interfaces description')) {
+                                          } else if (
+                                            command &&
+                                            command.includes(
+                                              "show interfaces description"
+                                            )
+                                          ) {
                                             return `Interface description ${interfaceName} ${action}`;
                                           } else {
                                             return `Interface status ${interfaceName} ${action}`;
@@ -1020,97 +1142,202 @@ const ComparisonModal = ({ comparisonData, onClose, onDownloadExcel }) => {
                                         return `${item.name} ${action}`;
                                       }
                                     } else if (item.command && item.data) {
-                                      const dataStr = typeof item.data === 'object' 
-                                        ? JSON.stringify(item.data).replace(/[{}"]/g, '').replace(/,/g, ', ')
-                                        : item.data;
+                                      const dataStr =
+                                        typeof item.data === "object"
+                                          ? JSON.stringify(item.data)
+                                              .replace(/[{}"]/g, "")
+                                              .replace(/,/g, ", ")
+                                          : item.data;
                                       return `${item.command} - ${dataStr}`;
                                     } else if (item.name) {
                                       return item.name;
                                     } else if (item.change || item.action) {
                                       // Handle change/action objects
                                       const action = item.change || item.action;
-                                      const target = item.target || item.interface || item.name || '';
-                                      if (target && target.includes('Ethernet')) {
+                                      const target =
+                                        item.target ||
+                                        item.interface ||
+                                        item.name ||
+                                        "";
+                                      if (
+                                        target &&
+                                        target.includes("Ethernet")
+                                      ) {
                                         // Enhanced interface formatting for target-based changes
-                                        if (command && command.includes('show interfaces status')) {
+                                        if (
+                                          command &&
+                                          command.includes(
+                                            "show interfaces status"
+                                          )
+                                        ) {
                                           return `Interface status ${target} ${action}`;
-                                        } else if (command && command.includes('show interfaces counters')) {
+                                        } else if (
+                                          command &&
+                                          command.includes(
+                                            "show interfaces counters"
+                                          )
+                                        ) {
                                           return `Interface counters ${target} ${action}`;
-                                        } else if (command && command.includes('show interfaces description')) {
+                                        } else if (
+                                          command &&
+                                          command.includes(
+                                            "show interfaces description"
+                                          )
+                                        ) {
                                           return `Interface description ${target} ${action}`;
                                         } else {
                                           return `Interface ${target} ${action}`;
                                         }
                                       }
-                                      return target ? `${target} ${action}` : action;
+                                      return target
+                                        ? `${target} ${action}`
+                                        : action;
                                     } else {
                                       // Enhanced interface object detection with property-specific formatting
                                       const keys = Object.keys(item);
-                                      const interfaceKey = keys.find(key => key.toLowerCase().includes('interface') || key.toLowerCase().includes('ethernet'));
-                                      
+                                      const interfaceKey = keys.find(
+                                        (key) =>
+                                          key
+                                            .toLowerCase()
+                                            .includes("interface") ||
+                                          key.toLowerCase().includes("ethernet")
+                                      );
+
                                       if (interfaceKey) {
-                                        const interfaceName = item[interfaceKey];
-                                        const action = changeType || 'changed';
-                                        
+                                        const interfaceName =
+                                          item[interfaceKey];
+                                        const action = changeType || "changed";
+
                                         // Determine interface property type based on command context first, then properties
-                                        if (command && command.includes('show interfaces status')) {
+                                        if (
+                                          command &&
+                                          command.includes(
+                                            "show interfaces status"
+                                          )
+                                        ) {
                                           return `Interface status ${interfaceName} ${action}`;
-                                        } else if (command && command.includes('show interfaces counters')) {
+                                        } else if (
+                                          command &&
+                                          command.includes(
+                                            "show interfaces counters"
+                                          )
+                                        ) {
                                           return `Interface counters ${interfaceName} ${action}`;
-                                        } else if (command && command.includes('show interfaces description')) {
+                                        } else if (
+                                          command &&
+                                          command.includes(
+                                            "show interfaces description"
+                                          )
+                                        ) {
                                           return `Interface description ${interfaceName} ${action}`;
-                                        } else if (item.linkStatus || item.lineProtocolStatus || item.interfaceType || item.bandwidth) {
+                                        } else if (
+                                          item.linkStatus ||
+                                          item.lineProtocolStatus ||
+                                          item.interfaceType ||
+                                          item.bandwidth
+                                        ) {
                                           return `Interface status ${interfaceName} ${action}`;
-                                        } else if (item.inOctets || item.outOctets || item.inUcastPkts || item.outUcastPkts) {
+                                        } else if (
+                                          item.inOctets ||
+                                          item.outOctets ||
+                                          item.inUcastPkts ||
+                                          item.outUcastPkts
+                                        ) {
                                           return `Interface counters ${interfaceName} ${action}`;
-                                        } else if (item.description || item.interfaceStatus) {
+                                        } else if (
+                                          item.description ||
+                                          item.interfaceStatus
+                                        ) {
                                           return `Interface description ${interfaceName} ${action}`;
                                         } else {
                                           return `Interface ${interfaceName} ${action}`;
                                         }
                                       }
-                                      
+
                                       // Check for direct Ethernet interface references in object keys
-                                      const ethernetKeys = keys.filter(key => key.includes('Ethernet'));
+                                      const ethernetKeys = keys.filter((key) =>
+                                        key.includes("Ethernet")
+                                      );
                                       if (ethernetKeys.length > 0) {
-                                        const results = ethernetKeys.map(ethKey => {
-                                          const action = changeType || 'changed';
-                                          // Determine property type based on command context first, then object structure
-                                          if (command && command.includes('show interfaces status')) {
-                                            return `Interface status ${ethKey} ${action}`;
-                                          } else if (command && command.includes('show interfaces counters')) {
-                                            return `Interface counters ${ethKey} ${action}`;
-                                          } else if (command && command.includes('show interfaces description')) {
-                                            return `Interface description ${ethKey} ${action}`;
-                                          } else {
-                                            const value = item[ethKey];
-                                            if (typeof value === 'object' && value !== null) {
-                                              if (value.linkStatus || value.lineProtocolStatus || value.interfaceType) {
-                                                return `Interface status ${ethKey} ${action}`;
-                                              } else if (value.inOctets || value.outOctets || value.inUcastPkts) {
-                                                return `Interface counters ${ethKey} ${action}`;
-                                              } else if (value.description || value.interfaceStatus) {
-                                                return `Interface description ${ethKey} ${action}`;
+                                        const results = ethernetKeys.map(
+                                          (ethKey) => {
+                                            const action =
+                                              changeType || "changed";
+                                            // Determine property type based on command context first, then object structure
+                                            if (
+                                              command &&
+                                              command.includes(
+                                                "show interfaces status"
+                                              )
+                                            ) {
+                                              return `Interface status ${ethKey} ${action}`;
+                                            } else if (
+                                              command &&
+                                              command.includes(
+                                                "show interfaces counters"
+                                              )
+                                            ) {
+                                              return `Interface counters ${ethKey} ${action}`;
+                                            } else if (
+                                              command &&
+                                              command.includes(
+                                                "show interfaces description"
+                                              )
+                                            ) {
+                                              return `Interface description ${ethKey} ${action}`;
+                                            } else {
+                                              const value = item[ethKey];
+                                              if (
+                                                typeof value === "object" &&
+                                                value !== null
+                                              ) {
+                                                if (
+                                                  value.linkStatus ||
+                                                  value.lineProtocolStatus ||
+                                                  value.interfaceType
+                                                ) {
+                                                  return `Interface status ${ethKey} ${action}`;
+                                                } else if (
+                                                  value.inOctets ||
+                                                  value.outOctets ||
+                                                  value.inUcastPkts
+                                                ) {
+                                                  return `Interface counters ${ethKey} ${action}`;
+                                                } else if (
+                                                  value.description ||
+                                                  value.interfaceStatus
+                                                ) {
+                                                  return `Interface description ${ethKey} ${action}`;
+                                                } else {
+                                                  return `Interface ${ethKey} ${action}`;
+                                                }
                                               } else {
                                                 return `Interface ${ethKey} ${action}`;
                                               }
-                                            } else {
-                                              return `Interface ${ethKey} ${action}`;
                                             }
                                           }
-                                        });
-                                        return results.join(', ');
+                                        );
+                                        return results.join(", ");
                                       }
-                                      
+
                                       // Improved fallback: create a readable string from object properties
                                       if (keys.length > 0) {
-                                        return keys.map(key => {
-                                          const value = item[key];
-                                          if (typeof value === 'object' && value !== null) {
-                                            return `${key}: ${JSON.stringify(value).replace(/[{}"]/g, '').replace(/,/g, ', ')}`;
-                                          }
-                                          return `${key}: ${value}`;
-                                        }).join(', ');
+                                        return keys
+                                          .map((key) => {
+                                            const value = item[key];
+                                            if (
+                                              typeof value === "object" &&
+                                              value !== null
+                                            ) {
+                                              return `${key}: ${JSON.stringify(
+                                                value
+                                              )
+                                                .replace(/[{}"]/g, "")
+                                                .replace(/,/g, ", ")}`;
+                                            }
+                                            return `${key}: ${value}`;
+                                          })
+                                          .join(", ");
                                       }
                                     }
                                   }
@@ -1118,28 +1345,47 @@ const ComparisonModal = ({ comparisonData, onClose, onDownloadExcel }) => {
                                   return String(item);
                                 };
 
-                                const ChangeDetailComponent = ({ changes, changeType, command }) => {
-                                  const [isExpanded, setIsExpanded] = React.useState(changes.length <= 3);
-                                  const displayChanges = isExpanded ? changes : changes.slice(0, 2);
+                                const ChangeDetailComponent = ({
+                                  changes,
+                                  changeType,
+                                  command,
+                                }) => {
+                                  const [isExpanded, setIsExpanded] =
+                                    React.useState(changes.length <= 3);
+                                  const displayChanges = isExpanded
+                                    ? changes
+                                    : changes.slice(0, 2);
                                   const hasMore = changes.length > 3;
-                                  
+
                                   return (
                                     <>
                                       {displayChanges.map((item, idx) => (
-                                        <div key={`${changeType}-${idx}`} className={`change-detail-row ${changeType}`}>
-                                          <span className="change-detail">{formatChangeItem(item, changeType, command)}</span>
+                                        <div
+                                          key={`${changeType}-${idx}`}
+                                          className={`change-detail-row ${changeType}`}
+                                        >
+                                          <span className="change-detail">
+                                            {formatChangeItem(
+                                              item,
+                                              changeType,
+                                              command
+                                            )}
+                                          </span>
                                         </div>
                                       ))}
                                       {hasMore && (
                                         <div className="change-expand-row">
-                                          <button 
+                                          <button
                                             className="change-expand-btn"
-                                            onClick={() => setIsExpanded(!isExpanded)}
-                                          >
-                                            {isExpanded 
-                                              ? `Show less` 
-                                              : `Show ${changes.length - 2} more ${changeType} changes`
+                                            onClick={() =>
+                                              setIsExpanded(!isExpanded)
                                             }
+                                          >
+                                            {isExpanded
+                                              ? `Show less`
+                                              : `Show ${
+                                                  changes.length - 2
+                                                } more ${changeType} changes`}
                                           </button>
                                         </div>
                                       )}
@@ -1147,34 +1393,40 @@ const ComparisonModal = ({ comparisonData, onClose, onDownloadExcel }) => {
                                   );
                                 };
 
-                                const hasDetailedChanges = (result.added && result.added.length > 0) ||
-                                                          (result.removed && result.removed.length > 0) ||
-                                                          (result.modified && result.modified.length > 0);
+                                const hasDetailedChanges =
+                                  (result.added && result.added.length > 0) ||
+                                  (result.removed &&
+                                    result.removed.length > 0) ||
+                                  (result.modified &&
+                                    result.modified.length > 0);
 
                                 if (hasDetailedChanges) {
                                   return (
                                     <div className="change-detail-list">
-                                      {result.added && result.added.length > 0 && (
-                                        <ChangeDetailComponent 
-                                          changes={result.added} 
-                                          changeType="added" 
-                                          command={command}
-                                        />
-                                      )}
-                                      {result.removed && result.removed.length > 0 && (
-                                        <ChangeDetailComponent 
-                                          changes={result.removed} 
-                                          changeType="removed" 
-                                          command={command}
-                                        />
-                                      )}
-                                      {result.modified && result.modified.length > 0 && (
-                                        <ChangeDetailComponent 
-                                          changes={result.modified} 
-                                          changeType="modified" 
-                                          command={command}
-                                        />
-                                      )}
+                                      {result.added &&
+                                        result.added.length > 0 && (
+                                          <ChangeDetailComponent
+                                            changes={result.added}
+                                            changeType="added"
+                                            command={command}
+                                          />
+                                        )}
+                                      {result.removed &&
+                                        result.removed.length > 0 && (
+                                          <ChangeDetailComponent
+                                            changes={result.removed}
+                                            changeType="removed"
+                                            command={command}
+                                          />
+                                        )}
+                                      {result.modified &&
+                                        result.modified.length > 0 && (
+                                          <ChangeDetailComponent
+                                            changes={result.modified}
+                                            changeType="modified"
+                                            command={command}
+                                          />
+                                        )}
                                     </div>
                                   );
                                 } else if (result.statistics) {
@@ -1182,31 +1434,50 @@ const ComparisonModal = ({ comparisonData, onClose, onDownloadExcel }) => {
                                     <div className="change-detail-list">
                                       {result.statistics.added_count > 0 && (
                                         <div className="change-detail-row added">
-                                          <span className="change-detail">Added: {result.statistics.added_count} items</span>
+                                          <span className="change-detail">
+                                            Added:{" "}
+                                            {result.statistics.added_count}{" "}
+                                            items
+                                          </span>
                                         </div>
                                       )}
                                       {result.statistics.removed_count > 0 && (
                                         <div className="change-detail-row removed">
-                                          <span className="change-detail">Removed: {result.statistics.removed_count} items</span>
+                                          <span className="change-detail">
+                                            Removed:{" "}
+                                            {result.statistics.removed_count}{" "}
+                                            items
+                                          </span>
                                         </div>
                                       )}
                                       {result.statistics.modified_count > 0 && (
                                         <div className="change-detail-row modified">
-                                          <span className="change-detail">Modified: {result.statistics.modified_count} items</span>
+                                          <span className="change-detail">
+                                            Modified:{" "}
+                                            {result.statistics.modified_count}{" "}
+                                            items
+                                          </span>
                                         </div>
                                       )}
-                                      {result.statistics.added_count === 0 && result.statistics.removed_count === 0 && result.statistics.modified_count === 0 && (
-                                        <div className="change-detail-row no-changes">
-                                          <span className="change-detail">No changes detected</span>
-                                        </div>
-                                      )}
+                                      {result.statistics.added_count === 0 &&
+                                        result.statistics.removed_count === 0 &&
+                                        result.statistics.modified_count ===
+                                          0 && (
+                                          <div className="change-detail-row no-changes">
+                                            <span className="change-detail">
+                                              No changes detected
+                                            </span>
+                                          </div>
+                                        )}
                                     </div>
                                   );
                                 } else if (result.status === "no_changes") {
                                   return (
                                     <div className="change-detail-list">
                                       <div className="change-detail-row no-changes">
-                                        <span className="change-detail">No changes detected</span>
+                                        <span className="change-detail">
+                                          No changes detected
+                                        </span>
                                       </div>
                                     </div>
                                   );
@@ -1313,16 +1584,16 @@ const OutputFilesModal = ({ isOpen, onClose, onCompareSelect }) => {
 
   React.useEffect(() => {
     if (isOpen) {
-      document.documentElement.classList.add('modal-open');
-      document.body.classList.add('modal-open');
+      document.documentElement.classList.add("modal-open");
+      document.body.classList.add("modal-open");
     } else {
-      document.documentElement.classList.remove('modal-open');
-      document.body.classList.remove('modal-open');
+      document.documentElement.classList.remove("modal-open");
+      document.body.classList.remove("modal-open");
     }
-    
+
     return () => {
-      document.documentElement.classList.remove('modal-open');
-      document.body.classList.remove('modal-open');
+      document.documentElement.classList.remove("modal-open");
+      document.body.classList.remove("modal-open");
     };
   }, [isOpen]);
 
@@ -1473,41 +1744,41 @@ const OutputFilesModal = ({ isOpen, onClose, onCompareSelect }) => {
               </div>
 
               <div className="controls-right">
-              {selectedFiles.length > 0 && (
-                <>
-                  <span className="selection-counter">
-                    {selectedFiles.length} Selected
-                  </span>
+                {selectedFiles.length > 0 && (
+                  <>
+                    <span className="selection-counter">
+                      {selectedFiles.length} Selected
+                    </span>
+                    <button
+                      className="delete-selected-button"
+                      onClick={handleDeleteSelected}
+                      title="Delete selected files"
+                    >
+                      <Trash2 size={16} />
+                      Delete Selected
+                    </button>
+                  </>
+                )}
+
+                {selectedFiles.length === 2 && (
                   <button
-                    className="delete-selected-button"
-                    onClick={handleDeleteSelected}
-                    title="Delete selected files"
+                    className="compare-button"
+                    onClick={handleCompare}
+                    title="Compare selected files"
                   >
-                    <Trash2 size={16} />
-                    Delete Selected
+                    <GitCompare size={16} />
+                    Compare Selected Files
                   </button>
-                </>
-              )}
+                )}
 
-              {selectedFiles.length === 2 && (
                 <button
-                  className="compare-button"
-                  onClick={handleCompare}
-                  title="Compare selected files"
+                  className="refresh-button"
+                  onClick={loadFiles}
+                  title="Refresh file list"
                 >
-                  <GitCompare size={16} />
-                  Compare Selected Files
+                  <RefreshCw size={16} />
+                  Refresh
                 </button>
-              )}
-
-              <button
-                className="refresh-button"
-                onClick={loadFiles}
-                title="Refresh file list"
-              >
-                <RefreshCw size={16} />
-                Refresh
-              </button>
               </div>
             </div>
           </div>
@@ -1602,16 +1873,16 @@ const LogsViewer = ({ isOpen, onClose }) => {
 
   React.useEffect(() => {
     if (isOpen) {
-      document.documentElement.classList.add('modal-open');
-      document.body.classList.add('modal-open');
+      document.documentElement.classList.add("modal-open");
+      document.body.classList.add("modal-open");
     } else {
-      document.documentElement.classList.remove('modal-open');
-      document.body.classList.remove('modal-open');
+      document.documentElement.classList.remove("modal-open");
+      document.body.classList.remove("modal-open");
     }
-    
+
     return () => {
-      document.documentElement.classList.remove('modal-open');
-      document.body.classList.remove('modal-open');
+      document.documentElement.classList.remove("modal-open");
+      document.body.classList.remove("modal-open");
     };
   }, [isOpen]);
 
@@ -1930,7 +2201,9 @@ function App() {
           let message = `✅ File uploaded successfully!\nFound ${result.device_count} devices`;
 
           if (result.detected_vendors && result.detected_vendors.length > 0) {
-            message += `\nDetected vendors: ${result.detected_vendors.join(", ")}`;
+            message += `\nDetected vendors: ${result.detected_vendors.join(
+              ", "
+            )}`;
           }
 
           if (result.warnings && result.warnings.length > 0) {
@@ -2989,7 +3262,7 @@ function App() {
                           </p>
                           <button
                             className="download-button small"
-                            onClick={onDownloadExcel}
+                            onClick={downloadComparisonExcel}
                           >
                             <Download size={14} />
                             Download Excel Report
@@ -3060,66 +3333,140 @@ function App() {
                     Showing {displayResults.length} of {results.length} devices
                   </span>
                 )}
+                {comparisonData && (
+                  <div className="comparison-indicator">
+                    <GitCompare size={16} />
+                    <span>Comparison Mode Active - Showing devices with changes highlighted</span>
+                  </div>
+                )}
               </div>
               <div className="table-wrapper">
-                <table className="results-table">
-                  <thead>
-                    <tr>
-                      <th>Status</th>
-                      <th>IP</th>
-                      <th>Hostname</th>
-                      <th>Model</th>
-                      <th>Serial</th>
-                      <th>Time (s)</th>
-                      <th>Details</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayResults.map((device, index) => (
-                      <tr
-                        key={`${device.ip_mgmt}-${index}`}
-                        className={`status-${device.status?.toLowerCase()}`}
-                      >
-                        <td className="status-cell">
-                          <DeviceStatusIcon status={device.connection_status} />
-                          <span
-                            className={`badge ${
-                              device.status === "Success"
-                                ? "badge-success"
-                                : "badge-danger"
-                            }`}
-                          >
-                            {device.status}
-                          </span>
-                        </td>
-                        <td className="ip-cell">{device.ip_mgmt || "N/A"}</td>
-                        <td>{device.nama_sw || "N/A"}</td>
-                        <td>{device.model_sw || "N/A"}</td>
-                        <td>{device.sn || "N/A"}</td>
-                        <td>{device.processing_time?.toFixed(2) ?? "N/A"}</td>
-                        <td className="details-cell">
-                          {device.status === "Success" ? (
-                            <button
-                              className="view-button"
-                              onClick={() => setDetailData(device.data)}
-                            >
-                              <Eye size={14} />
-                              View
-                            </button>
-                          ) : (
-                            <span className="error-text" title={device.error}>
-                              {device.error
-                                ? device.error.length > 50
-                                  ? `${device.error.substring(0, 50)}...`
-                                  : device.error
-                                : "Unknown"}
-                            </span>
-                          )}
-                        </td>
+                <div className="device-list-scrollable">
+                  <table className="results-table">
+                    <thead>
+                      <tr>
+                        <th>Status</th>
+                        <th>IP</th>
+                        <th>Hostname</th>
+                        <th>Model</th>
+                        <th>Serial</th>
+                        <th>Time (s)</th>
+                        {comparisonData && <th>Changes</th>}
+                        <th>Details</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {displayResults.map((device, index) => {
+                        // Find comparison data for this device if available
+                        let deviceComparisonData = null;
+                        let hasChanges = false;
+                        let changeSummary = null;
+                        
+                        if (comparisonData?.data) {
+                          deviceComparisonData = comparisonData.data.find(
+                            (compDevice) => compDevice.ip_mgmt === device.ip_mgmt
+                          );
+                          if (deviceComparisonData) {
+                            changeSummary = getDeviceChangeSummary(
+                              deviceComparisonData.command_results || {}
+                            );
+                            hasChanges = changeSummary.total > 0;
+                          }
+                        }
+
+                        return (
+                          <tr
+                            key={`${device.ip_mgmt}-${index}`}
+                            className={`status-${device.status?.toLowerCase()} ${
+                              hasChanges ? "has-changes" : ""
+                            } ${comparisonData && !hasChanges ? "no-changes" : ""}`}
+                          >
+                            <td className="status-cell">
+                              <DeviceStatusIcon status={device.connection_status} />
+                              <span
+                                className={`badge ${
+                                  device.status === "Success"
+                                    ? "badge-success"
+                                    : "badge-danger"
+                                }`}
+                              >
+                                {device.status}
+                              </span>
+                              {hasChanges && (
+                                <div className="change-indicator" title="Device has changes">
+                                  <AlertTriangle size={12} className="change-alert" />
+                                </div>
+                              )}
+                            </td>
+                            <td className="ip-cell">{device.ip_mgmt || "N/A"}</td>
+                            <td>{device.nama_sw || "N/A"}</td>
+                            <td>{device.model_sw || "N/A"}</td>
+                            <td>{device.sn || "N/A"}</td>
+                            <td>{device.processing_time?.toFixed(2) ?? "N/A"}</td>
+                            {comparisonData && (
+                              <td className="changes-cell">
+                                {changeSummary ? (
+                                  <div className="change-badges-compact">
+                                    {changeSummary.added > 0 && (
+                                      <span className="change-badge-mini added" title={`${changeSummary.added} items added`}>
+                                        +{changeSummary.added}
+                                      </span>
+                                    )}
+                                    {changeSummary.removed > 0 && (
+                                      <span className="change-badge-mini removed" title={`${changeSummary.removed} items removed`}>
+                                        -{changeSummary.removed}
+                                      </span>
+                                    )}
+                                    {changeSummary.modified > 0 && (
+                                      <span className="change-badge-mini modified" title={`${changeSummary.modified} items modified`}>
+                                        ~{changeSummary.modified}
+                                      </span>
+                                    )}
+                                    {changeSummary.total === 0 && (
+                                      <span className="no-changes-text">No Changes</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="not-in-comparison">Not in comparison</span>
+                                )}
+                              </td>
+                            )}
+                            <td className="details-cell">
+                              {device.status === "Success" ? (
+                                <div className="details-actions">
+                                  <button
+                                    className="view-button"
+                                    onClick={() => setDetailData(device.data)}
+                                  >
+                                    <Eye size={14} />
+                                    View
+                                  </button>
+                                  {deviceComparisonData && (
+                                    <button
+                                      className="compare-button-mini"
+                                      onClick={() => setDetailData(deviceComparisonData)}
+                                      title="View comparison details"
+                                    >
+                                      <GitCompare size={12} />
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="error-text" title={device.error}>
+                                  {device.error
+                                    ? device.error.length > 50
+                                      ? `${device.error.substring(0, 50)}...`
+                                      : device.error
+                                    : "Unknown"}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </>

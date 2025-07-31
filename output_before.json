@@ -1,0 +1,349 @@
+{
+  "metadata": {
+    "timestamp": "20250723_052151",
+    "session_id": "874eddc8-34cf-4814-9ef4-4ec25452e1b3",
+    "selected_commands": [
+      "arista_eos_interfaces",
+      "arista_eos_mlag",
+      "arista_eos_protocols",
+      "arista_eos_routing",
+      "arista_eos_switching",
+      "arista_eos_system_info"
+    ],
+    "total_devices": 1,
+    "successful_devices": 1,
+    "failed_devices": 0,
+    "connection_method": "API"
+  },
+  "results": [
+    {
+      "ip_mgmt": "10.52.72.5",
+      "nama_sw": "GAC-101-MGMT-DST1-0602",
+      "sn": "FGN23260BXE",
+      "model_sw": "DCS-7050SX3-96YC8-F",
+      "status": "Success",
+      "data": {
+        "interfaces": {
+          "show interfaces status": {
+            "interfaceStatuses": {
+              "Ethernet1": {
+                "description": "GAC-101-MGMT-TOR1-0201",
+                "linkStatus": "disconnected",
+                "duplex": "duplexFull",
+                "bandwidth": 10000000000,
+                "autoNegotigateActive": false,
+                "autoNegotiateActive": false,
+                "interfaceType": "10GBASE-SR",
+                "vlanInformation": {
+                  "vlanExplanation": "in Po2",
+                  "interfaceForwardingModel": "dataLink"
+                },
+                "lineProtocolStatus": "down",
+                "interfaceDamped": false
+              },
+              "Ethernet3": {
+                "description": "GAC-101-MGMT-TOR1-0205 - Ethernet50",
+                "linkStatus": "connected",
+                "duplex": "duplexFull",
+                "bandwidth": 10000000000,
+                "autoNegotigateActive": false,
+                "autoNegotiateActive": false,
+                "interfaceType": "10GBASE-SR",
+                "vlanInformation": {
+                  "vlanExplanation": "in Po4",
+                  "interfaceForwardingModel": "dataLink"
+                },
+                "lineProtocolStatus": "up",
+                "interfaceDamped": false
+              }
+            }
+          },
+          "show interfaces description": {
+            "interfaceDescriptions": {
+              "Ethernet1": {
+                "description": "GAC-101-MGMT-TOR1-0201",
+                "lineProtocolStatus": "down",
+                "interfaceStatus": "down"
+              },
+              "Ethernet3": {
+                "description": "GAC-101-MGMT-TOR1-0205 - Ethernet50",
+                "lineProtocolStatus": "up",
+                "interfaceStatus": "up"
+              }
+            }
+          }
+        },
+        "mlag": {
+          "show mlag config-sanity": {
+            "globalConfiguration": {},
+            "interfaceConfiguration": {},
+            "mlagActive": false,
+            "mlagConnected": false
+          },
+          "show mlag interfaces detail": {
+            "interfaces": {
+              "1": {
+                "localInterface": "1",
+                "localInterfaceStatus": "1",
+                "peerInterface": "1",
+                "peerInterfaceStatus": "1",
+                "status": "1",
+                "detail": {
+                  "localInterfaceEnabled": "ena",
+                  "peerInterfaceEnabled": "ena",
+                  "lastChangeTime": 900.606894277,
+                  "changeCount": 3
+                },
+                "timeoutCount": 0
+              },
+              "3": {
+                "localInterface": "Port-Channel3",
+                "localInterfaceStatus": "up",
+                "peerInterface": "Port-Channel3",
+                "peerInterfaceStatus": "up",
+                "status": "active-full",
+                "detail": {
+                  "localInterfaceEnabled": "ena",
+                  "peerInterfaceEnabled": "ena",
+                  "lastChangeTime": 900.534545619,
+                  "changeCount": 3
+                },
+                "timeoutCount": 0
+              }
+            }
+          }
+        },
+        "protocols": {
+          "show lldp neighbors": {
+            "tablesLastChangeTime": 1753118702.1447883,
+            "tablesInserts": 49,
+            "tablesDeletes": 3,
+            "tablesDrops": 0,
+            "tablesAgeOuts": 0,
+            "lldpNeighbors": [
+              {
+                "port": "Ethernet1",
+                "neighborDevice": "1",
+                "neighborPort": "1",
+                "ttl": 1
+              },
+              {
+                "port": "Ethernet3",
+                "neighborDevice": "GAC-101-MGMT-TOR1-0205",
+                "neighborPort": "Ethernet50",
+                "ttl": 120
+              }
+            ]
+          },
+          "show ip arp": {
+            "ipV4Neighbors": [
+              {
+                "address": "1.1.1.1",
+                "age": 0,
+                "hwAddress": "001c.7300.0001",
+                "interface": "Vlan1, Port-Channel1"
+              },
+              {
+                "address": "10.52.72.3",
+                "age": 9448,
+                "hwAddress": "cc1a.a341.3bb9",
+                "interface": "Vlan4093, Port-Channel100"
+              }
+            ],
+            "totalEntries": 47,
+            "staticEntries": 0,
+            "dynamicEntries": 47,
+            "notLearnedEntries": 0
+          }
+        },
+        "routing": {
+          "show ip route summary": {
+            "connected": 5,
+            "static": 1,
+            "vcs": 0,
+            "staticNexthopGroup": 0,
+            "dynamicPolicy": 0,
+            "ospfCounts": {
+              "ospfTotal": 0,
+              "ospfIntraArea": 0,
+              "ospfInterArea": 0,
+              "ospfExternal1": 0,
+              "ospfExternal2": 0,
+              "nssaExternal1": 0,
+              "nssaExternal2": 0
+            },
+            "ospfv3Counts": {
+              "ospfv3Total": 0,
+              "ospfv3IntraArea": 0,
+              "ospfv3InterArea": 0,
+              "ospfv3External1": 0,
+              "ospfv3External2": 0,
+              "ospfv3NssaExternal1": 0,
+              "ospfv3NssaExternal2": 0
+            },
+            "bgpCounts": {
+              "bgpTotal": 0,
+              "bgpExternal": 0,
+              "bgpInternal": 0,
+              "bgpLocal": 0
+            },
+            "isisCounts": {
+              "isisTotal": 0,
+              "isisLevel1": 0,
+              "isisLevel2": 0
+            },
+            "gribi": 0,
+            "rip": 0,
+            "internal": 6,
+            "attached": 47,
+            "aggregate": 0,
+            "maskLen": {
+              "8": 2,
+              "0": 1,
+              "31": 1,
+              "23": 1,
+              "32": 51
+            },
+            "totalRoutes": 60,
+            "isis": 0
+          }
+        },
+        "switching": {
+          "show mac address-table": {
+            "unicastTable": {
+              "tableEntries": [
+                {
+                  "vlanId": 1001,
+                  "macAddress": "1:1:1:1:1:1",
+                  "entryType": "dynamic",
+                  "interface": "Port-Channel100",
+                  "moves": 1,
+                  "lastMove": 1.749315
+                },
+                {
+                  "vlanId": 1,
+                  "macAddress": "00:1c:73:00:00:01",
+                  "entryType": "dynamic",
+                  "interface": "Port-Channel1",
+                  "moves": 1,
+                  "lastMove": 1753118722.168967
+                }
+              ]
+            },
+            "multicastTable": {
+              "tableEntries": []
+            }
+          },
+          "show vlan brief": {
+            "vlans": {
+              "1001": {
+                "name": "1",
+                "dynamic": true,
+                "status": "deactivate"
+              }
+            },
+            "1": {
+              "name": "default",
+              "dynamic": false,
+              "status": "active"
+            },
+            "sourceDetail": ""
+          },
+          "show port-channel detailed": {
+            "portChannels": {
+              "Port-Channel14": {
+                "fallbackState": "unconfigured",
+                "activePorts": {
+                  "Ethernet13": {
+                    "timeBecameActive": 1,
+                    "protocol": "mode on",
+                    "lacpMode": "deactivate",
+                    "weight": 1,
+                    "collecting": true,
+                    "distributing": true
+                  },
+                  "PeerEthernet13": {
+                    "timeBecameActive": 1753113843.7445793,
+                    "protocol": "lacp",
+                    "lacpMode": "active",
+                    "weight": 0
+                  }
+                },
+                "rxPorts": {},
+                "inactivePorts": {},
+                "recircFeature": [],
+                "inactiveLag": false,
+                "minLinks": 0,
+                "minSpeed": "0 gbps",
+                "currWeight": 1,
+                "maxWeight": 64
+              },
+              "Port-Channel20": {
+                "fallbackState": "unconfigured",
+                "activePorts": {
+                  "Ethernet19": {
+                    "timeBecameActive": 1753114373.4633136,
+                    "protocol": "lacp",
+                    "lacpMode": "active",
+                    "weight": 1,
+                    "collecting": true,
+                    "distributing": true
+                  },
+                  "PeerEthernet19": {
+                    "timeBecameActive": 1753113862.5639985,
+                    "protocol": "lacp",
+                    "lacpMode": "active",
+                    "weight": 0
+                  }
+                },
+                "rxPorts": {},
+                "inactivePorts": {},
+                "recircFeature": [],
+                "inactiveLag": false,
+                "minLinks": 0,
+                "minSpeed": "0 gbps",
+                "currWeight": 1,
+                "maxWeight": 64
+              }
+            }
+          }
+        },
+        "system_info": {
+          "show version": {
+            "mfgName": "Arista",
+            "modelName": "DCS-7050SX3-96YC8-F",
+            "hardwareRevision": "11.11",
+            "serialNumber": "FGN23260BXE",
+            "systemMacAddress": "38:38:a6:d0:55:11",
+            "hwMacAddress": "38:38:a6:d0:55:11",
+            "configMacAddress": "00:00:00:00:00:00",
+            "version": "1.30.5M",
+            "architecture": "x86_64",
+            "internalVersion": "1",
+            "internalBuildId": "706564d1-2d80-4aa3-972b-70553d13431f",
+            "imageFormatVersion": "3.0",
+            "imageOptimization": "Default",
+            "bootupTimestamp": 1,
+            "uptime": 1,
+            "memTotal": 8099700,
+            "memFree": 5376156,
+            "isIntlVersion": false
+          },
+          "show hostname": {
+            "hostname": "1",
+            "fqdn": "1"
+          }
+        }
+      },
+      "error": null,
+      "processing_time": 1.638427,
+      "retry_count": 0,
+      "last_attempt": "2025-07-23T05:21:51.634888",
+      "connection_status": "success",
+      "detected_device_type": "arista_eos",
+      "api_endpoint": "https://10.52.72.5/command-api",
+      "api_status": "Connected",
+      "api_response_time": 0.25689268112182617
+    }
+  ]
+}

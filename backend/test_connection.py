@@ -8,13 +8,6 @@ import getpass
 import sys
 from utils.ssl_utils import setup_arista_connection
 
-try:
-    Server = setup_arista_connection()
-except ImportError as e:
-    print(f"Gagal menginstal jsonrpclib-pelix. Error: {e}")
-    print("Silakan instal manual: pip install jsonrpclib-pelix")
-    sys.exit(1)
-
 def test_arista_connection():
     """Menguji koneksi ke perangkat Arista dengan bypass SSL."""
 
@@ -37,7 +30,7 @@ def test_arista_connection():
 
         # Buat koneksi server. Tidak perlu transport kustom lagi.
         print("Membuat koneksi...")
-        switch = Server(url)
+        switch = setup_arista_connection(url)
 
         # Uji dengan perintah 'show version'
         print("Menjalankan 'show version'...")
@@ -102,7 +95,7 @@ def test_multiple_commands():
 
     try:
         socket.setdefaulttimeout(30)
-        switch = Server(url)
+        switch = setup_arista_connection(url)
 
         print(f"\n🧪 Menguji beberapa perintah di {host}:")
         print("=" * 50)

@@ -2,51 +2,29 @@
 # This file defines the commands to execute on different network device types
 
 arista_eos:
-  system_info:
-    - show version
-    - show hostname
-    - show inventory
-    - show boot-config
-
   interfaces:
     - show interfaces status
-    - show interfaces counters
     - show interfaces description
+
+  mlag:
+    - show mlag config-sanity
+    - show mlag interfaces detail
+
+  protocols:
+    - show lldp neighbors
+    - show ip arp
 
   routing:
     - show ip route summary
-    - show ip route
-    - show ipv6 route summary
 
   switching:
     - show mac address-table
-    - show vlan
-    - show spanning-tree
-    - show port-channel summary
+    - show vlan brief
+    - show port-channel detailed
 
-  protocols:
-    - show ip ospf neighbor
-    - show ip bgp summary
-    - show lldp neighbors
-    - show cdp neighbors
-    - show ip arp
-
-  monitoring:
-    - show processes top
-    - show processes cpu
-    - show memory
-    - show environment all
-
-  mlag:
-    - show mlag
-    - show mlag config-sanity
-    - show mlag interfaces detail
-    - show mlag detail
-
-  security:
-    - show ip access-lists
-    - show aaa accounting
-    - show users
+  system_info:
+    - show version
+    - show hostname
 # cisco_ios:
 #   system_info:
 #     - show version
